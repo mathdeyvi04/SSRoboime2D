@@ -2,6 +2,9 @@
 logs/
 venv/
 
+main
+debug
+
 
 
 

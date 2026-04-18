@@ -28,6 +28,7 @@ public:
 
     /**
      * @brief Construtor: conecta ao servidor e realiza handshake UDP.
+     * @param is_last_one Booleano que indica se o jogador é o último
      * @details Handshake (troca de porta):
      *          1. Envia "(init NAME (version 18))" para porta fixa (Booting::PORTSERVER)
      *          2. Recebe resposta, capturando a porta real do servidor (from.sin_port)
@@ -35,7 +36,7 @@ public:
      *          4. Aplica connect() para envio/recebimento simplificado
      *          5. Configura socket como não-bloqueante
      */
-    ServerComm() {
+    ServerComm(bool is_last_one) {
         // Definições do Socket e da Comunicação
         this->__fd = socket(AF_INET, SOCK_DGRAM, 0);
         this->__serveraddr.sin_family = AF_INET;
@@ -48,7 +49,7 @@ public:
 
         // Handshake
         std::string init_msg = std::format(
-            "(init {} (version 18))",
+            (is_last_one) ? "(init {} (version 18) (goalie)" : "(init {} (version 18))",
             Booting::TEAMNAME
         );
         sendto(
@@ -81,7 +82,7 @@ public:
         fcntl(this->__fd, F_SETFL, O_NONBLOCK);
     }
 
-    ~ServerComm(){ close(this->__fd); }
+    ~ServerComm(){ send_immediate("(bye)"); close(this->__fd); }
 
     /**
      * @brief Envia mensagem imediatamente
