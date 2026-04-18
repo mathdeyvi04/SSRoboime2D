@@ -3,41 +3,78 @@
 #include <string_view>
 #include <cstdint>
 
-#include "../communication/ServerComm.hpp"
+#include <cstdlib>
+#include <ctime>
 
+#include "../communication/ServerComm.hpp"
 
 class BasicAgent {
 private:
     ServerComm __sc;
 
-
-    uint8_t unum;
 public:
-
-    static uint8_t number_players = 0;
 
     BasicAgent() {
         // Inicializamos todas os pontos principais
-        this->unum = ++number_players;
 
         // Teletransportamos o jogador para a posição correta
         this->beam(
-
+            -54 + (rand() % 55), // Restrito ao Booting
+            -32 + (rand() % 65), // Restrito ao Booting
+            // Inicialmente, vamos apenas passar 0 para left e 180 para right
+            0,
+            0
         );
     };
 
-    void beam(int posx, int posy, int angle){
-         // It moves the player to the exact position of X (between −54 and 54) and Y (between −32 and 32) in one simulation cycle.
+    /**
+     * @brief Teletransporta o agente para posição absoluta no campo. Também é capaz de
+     * movimentar a cabeça do jogador
+     *
+     * @param posx Coordenada X (-54 a 54)
+     * @param posy Coordenada Y (-32 a 32)
+     * @param angle_body Ângulo do corpo (graus)
+     * @param angle_head Ângulo da cabeça (graus)
+     *
+     * @note Executa 3 comandos: move (teletransporte), turn (corpo), turn_neck (cabeça)
+     */
+    void beam(int posx, int posy, int angle_body = 0, int angle_head = 0){
 
+        // Teletransportamos o corpo
+        this->__sc.send_immediate(
+            std::format(
+                "(move {} {})",
+                posx,
+                posy
+            )
+        );
 
+        if(!angle_body){ return; }
+        // Movemos o corpo
+        this->__sc.send_immediate(
+            std::format(
+                "(turn {})",
+                angle_body
+            )
+        );
+
+        if(!angle_head){ return; }
+        // Movemos a cabeça
+        this->__sc.send_immediate(
+            std::format(
+                "(turn_neck {})",
+                angle_head
+            )
+        );
     }
 
     void run() {
 
         // Recebemos algo do servidor
-        std::string_view this->__sc.receive();
+        std::string_view message_from_server = this->__sc.receive();
 
         // Interpretamos a mensagem
+
 
         // Tomamos alguma decisão
 

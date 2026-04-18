@@ -4,6 +4,7 @@
 #include <format>
 #include <string>
 #include <string_view>
+#include <cstdint>
 #include <array>
 
 // --- Para a manipulação de sockets em ambiente Linux
@@ -26,6 +27,9 @@ private:
 
 public:
 
+    uint8_t unum = 0;
+    inline static uint8_t number_players = 0; // Definiremos o número do jogador aqui, sim.
+
     /**
      * @brief Construtor: conecta ao servidor e realiza handshake UDP.
      * @param is_last_one Booleano que indica se o jogador é o último
@@ -36,7 +40,10 @@ public:
      *          4. Aplica connect() para envio/recebimento simplificado
      *          5. Configura socket como não-bloqueante
      */
-    ServerComm(bool is_last_one) {
+    ServerComm() {
+
+        this->unum = ++ServerComm::number_players;
+
         // Definições do Socket e da Comunicação
         this->__fd = socket(AF_INET, SOCK_DGRAM, 0);
         this->__serveraddr.sin_family = AF_INET;
@@ -48,10 +55,13 @@ public:
         );
 
         // Handshake
-        std::string init_msg = std::format(
-            (is_last_one) ? "(init {} (version 18) (goalie)" : "(init {} (version 18))",
-            Booting::TEAMNAME
-        );
+        std::string init_msg;
+        if(ServerComm::number_players == 11) {
+            init_msg = std::format("(init {} (version 18) (goalie))", Booting::TEAMNAME);
+        }
+        else {
+            init_msg = std::format("(init {} (version 18))", Booting::TEAMNAME);
+        }
         sendto(
             this->__fd,
             init_msg.c_str(),

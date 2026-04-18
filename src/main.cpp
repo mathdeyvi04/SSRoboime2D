@@ -3,7 +3,9 @@
 
 int main(int argc, char** argv){
 
-    const int quant = 11;
+    srand(time(nullptr));
+
+    const int quant = 1;
     std::array<BasicAgent, quant> team;
 
     // Funcionamento Contínuo
