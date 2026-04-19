@@ -41,7 +41,6 @@ public:
      *          5. Configura socket como não-bloqueante
      */
     ServerComm() {
-
         this->unum = ++ServerComm::number_players;
 
         // Definições do Socket e da Comunicação
