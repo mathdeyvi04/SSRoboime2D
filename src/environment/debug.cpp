@@ -13,6 +13,7 @@ int main(int argc, char** argv) {
 
     // Vamos criar um ambiente de teste
     Environment env;
+    env.unum = 1;
 
     // Realizamos os testes
     while(std::getline(file, linha)) {

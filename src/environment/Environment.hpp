@@ -2,10 +2,10 @@
 
 #include <cstdint>
 #include <string_view>
-#include <functional>
 #include <optional>
 #include <utility>
 #include <array>
+#include <charconv>
 #include <iostream>
 
 class Environment {
@@ -43,7 +43,22 @@ public:
     inline static PlayMode pm;
 
     // Atributos Únicos a Cada Jogador
+    /* Atualizaremos esse valor a partir do ServerComm */
     uint8_t unum = 0;
+    /*
+    [0] -> qualidade [1] -> largura
+    Possíveis valores de qualidade: (0, high) e (1, low)
+    Possíveis valores de largura: (0, narrow), (1, normal), (2, wide)
+    Cada combinação possível uma taxa de envio de mensagens específicas
+    */
+    std::array<uint8_t, 2> view_mode;
+    /*
+    [stamina atual, effort atual, reserva total de stamin]
+    */
+    std::array<size_t, 3> stamina_info;
+    std::array<int, 2> speed = {0, 0};
+    int head_angle = 0;
+    std::array<uint8_t, 9> action_counters;
 
     class WorldParser {
     private:
@@ -62,7 +77,7 @@ public:
         }
 
         std::string_view get_next_str() {
-            while(*this->cursor == ' '){ this->cursor++; }
+            while(*this->cursor == ' ' || *this->cursor == '('){ this->cursor++; }
             const char* str_start = this->cursor;
             while(*this->cursor != ' ' && *this->cursor != ')'){ this->cursor++; }
             return {str_start, static_cast<size_t>(this->cursor - str_start)};
@@ -77,6 +92,132 @@ public:
                 count_pair += (*this->cursor == '(') * (1) + (*this->cursor == ')') * (-1);
                 this->cursor++;
             }
+        }
+
+        void parse_sensebody(Environment& env) {
+
+            // Por algum motivo, o primeiro valor está separado.
+            std::string_view str_cycle = this->get_next_str();
+            if(env.unum == 1) {
+                std::from_chars(str_cycle.data(), str_cycle.data() + str_cycle.size(), Environment::cycle);
+            }
+
+            while(true) {
+
+                std::string_view lower_tag = this->get_next_str();
+
+                switch(lower_tag[0]) {
+
+                    case 'v': { // view_mode
+
+                        this->cursor += 1;
+                        switch(*this->cursor) {
+
+                            case 'h': {
+
+                                env.view_mode[0] = 0;
+                                this->cursor += 4;
+                                break;
+                            }
+
+                            case 'l': {
+
+                                env.view_mode[0] = 1;
+                                this->cursor += 3;
+                                break;
+                            }
+                        }
+
+                        this->cursor += 2;
+                        switch(*this->cursor) {
+
+                            case 'a': { // narrow
+                                env.view_mode[1] = 0;
+                                break;
+                            }
+
+                            case 'o': { // normal
+                                env.view_mode[1] = 1;
+                                break;
+                            }
+
+                            case 'i': { // wide
+                                env.view_mode[1] = 2;
+                                break;
+                            }
+                        }
+
+                        this->skip_until_char(')');
+                        break;
+                    }
+
+                    case 's': { // stamina speed
+
+                        if(lower_tag[1] == 't') {
+                            for(auto& elemento : env.stamina_info) {
+                                std::string_view str_value = this->get_next_str();
+                                std::from_chars(
+                                    str_value.data(),
+                                    str_value.data() + str_value.size(),
+                                    elemento
+                                );
+                            }
+                        }
+                        else if(lower_tag[1] == 'p') {
+                            for(auto& elemento : env.speed) {
+                                std::string_view str_value = this->get_next_str();
+                                std::from_chars(
+                                    str_value.data(),
+                                    str_value.data() + str_value.size(),
+                                    elemento
+                                );
+                            }
+                        }
+
+                        this->skip_until_char(')');
+                        break;
+                    }
+
+                    case 'h': { // head_angle
+                        std::string_view str_head_angle = this->get_next_str();
+                        std::from_chars(
+                            str_head_angle.data(),
+                            str_head_angle.data() + str_head_angle.size(),
+                            env.head_angle
+                        );
+                        this->cursor++;
+
+                        /* Sabemos que agora vem os ActionCounters */
+                        /* Vamos tratá-los aqui de uma vez         */
+                        for(auto& action_counter : env.action_counters) {
+                            this->get_next_str(); // jogamos o nome no lixo, pois já sabemos a ordem
+                            std::string_view str_value = this->get_next_str();
+                            std::from_chars(
+                                str_value.data(),
+                                str_value.data() + str_value.size(),
+                                action_counter
+                            );
+                        }
+
+                        break;
+                    }
+
+                    case 'a': {
+
+
+
+                        break;
+                    }
+
+                    default: {
+                        break;
+                    }
+                }
+            }
+
+
+
+
         }
 
     public:
@@ -100,18 +241,18 @@ public:
 
                     case 'i': { // init
 
-                        if(this->unum != 1){
+                        if(env.unum != 1){
                             // Para que seja thread-safe, permitiremos que apenas o jogador 1 faça essas alterações.
                             break;
                         }
-                        env.is_left = this->get_next_str()[0] == 'l';
+                        Environment::is_left = this->get_next_str()[0] == 'l';
                         // Devemos pular o número de uniforme, pois já está salvo no ServerComm
                         this->get_next_str();
                         // É garantido que teremos is_left definido daqui em diante
                         std::string_view possible_mode = this->get_next_str();
                         std::optional<Environment::PlayMode> result_from_search = Environment::get_play_mode(possible_mode);
                         if(result_from_search.has_value()) {
-                            env.pm = std::move(result_from_search.value());
+                            Environment::pm = std::move(result_from_search.value());
                         }
                         else {
                             std::cout << "Modo Desconhecido: " << possible_mode << std::endl;
@@ -131,6 +272,7 @@ public:
 
                             case 10: { // sense_body
 
+                                this->parse_sensebody(env);
                                 break;
                             }
 
