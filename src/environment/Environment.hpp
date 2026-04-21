@@ -11,9 +11,9 @@
 class Environment {
 public:
 
-    // Atributos de Partida
+    // Atributos Gerais Comuns a Cada Jogador
     inline static bool is_left = false;
-
+    inline static int cycle    = 0;
     enum class PlayMode : uint8_t {
         // Neutros
         BEFORE_KICK_OFF = 0b0000'0000,
@@ -40,10 +40,10 @@ public:
 
         return std::nullopt;
     }
-    PlayMode pm;
+    inline static PlayMode pm;
 
-
-
+    // Atributos Únicos a Cada Jogador
+    uint8_t unum = 0;
 
     class WorldParser {
     private:
@@ -68,6 +68,17 @@ public:
             return {str_start, static_cast<size_t>(this->cursor - str_start)};
         }
 
+        void skip_unknown() {
+            // Vamos considerar que acabamos de encontrar uma tag desconhecida, ou seja passamos por '('.
+            // Devemos encontrar outro ')' para eliminar este e, finalmente, encerrar a função.
+
+            uint8_t count_pair = 1;
+            while(count_pair != 0) {
+                count_pair += (*this->cursor == '(') * (1) + (*this->cursor == ')') * (-1);
+                this->cursor++;
+            }
+        }
+
     public:
 
         void update_from_server(
@@ -88,6 +99,11 @@ public:
                 switch (uppest_tag[0]) {
 
                     case 'i': { // init
+
+                        if(this->unum != 1){
+                            // Para que seja thread-safe, permitiremos que apenas o jogador 1 faça essas alterações.
+                            break;
+                        }
                         env.is_left = this->get_next_str()[0] == 'l';
                         // Devemos pular o número de uniforme, pois já está salvo no ServerComm
                         this->get_next_str();
@@ -120,6 +136,7 @@ public:
 
                             case 12: { // server_param
 
+                                this->skip_unknown();
                                 break;
                             }
                         }
@@ -129,15 +146,18 @@ public:
 
                     case 'p': { // player_param player_type
 
+                        this->skip_unknown();
                         break;
                     }
 
                     case 'o': { // ok
 
+                        this->skip_unknown();
                         break;
                     }
 
                     default:
+                        this->skip_unknown();
                         std::cout << "Tag Desconhecida: " << uppest_tag << std::endl;
                 }
 
@@ -148,6 +168,5 @@ public:
             this->end    = nullptr;
         }
     };
-
     WorldParser wp;
 };

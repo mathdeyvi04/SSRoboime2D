@@ -23,6 +23,7 @@ public:
 
     BasicAgent() {
         // Inicializamos todas os pontos principais
+       this->__env.unum = this->__sc.unum;
 
         // Teletransportamos o jogador para a posição correta
         this->beam(
