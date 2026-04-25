@@ -5,11 +5,11 @@ from PIL import Image, ImageTk
 
 
 class FieldMap(ctk.CTkFrame):
-    def __init__(self, master, imagem_fundo, largura=900, altura=600):
+    def __init__(self, master, imagem_fundo, largura=108, altura=64):
         super().__init__(master)
 
-        self.largura = largura
-        self.altura = altura
+        self.largura = largura * 9
+        self.altura = altura * 9
         self.imagem_fundo_path = imagem_fundo
 
         self.canvas = tk.Canvas(
@@ -35,8 +35,15 @@ class FieldMap(ctk.CTkFrame):
 
         self.canvas.create_image(0, 0, image=self.fundo_tk, anchor="nw")
 
-    def add_player(self, x, y, nome="Jogador", cor="red"):
+    def converter_coordenadas(self, x, y):
+        new_x = (x + 54) * 9
+        new_y = (32 - y) * 9
+        return new_x, new_y
+
+    def add_player(self, x_c, y_c, nome="Jogador", cor="red"):
         raio = 5
+
+        x, y = self.converter_coordenadas(x_c, y_c)
 
         circulo = self.canvas.create_oval(
             x - raio,

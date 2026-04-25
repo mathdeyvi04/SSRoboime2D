@@ -1,7 +1,6 @@
 import tkinter as tk
 
 import customtkinter as ctk
-
 from src.mapa import FieldMap
 from src.search import SearchPath
 
@@ -22,8 +21,8 @@ class App(ctk.CTk):
         self.mapa = FieldMap(
             self,
             imagem_fundo="src/images/campo.png",  # troque pelo nome da sua imagem
-            largura=600,
-            altura=400,
+            largura=108,
+            altura=64,
         )
         self.mapa.pack(pady=20)
 
@@ -63,29 +62,41 @@ class App(ctk.CTk):
     def carregar_exemplo(self):
         self.mapa.limpar_jogadores()
 
-        self.mapa.add_player(80, 300, "AZ1", "blue")
-        self.mapa.add_player(180, 90, "AZ2", "blue")
-        self.mapa.add_player(180, 230, "AZ3", "blue")
-        self.mapa.add_player(180, 370, "AZ4", "blue")
-        self.mapa.add_player(180, 510, "AZ5", "blue")
-        self.mapa.add_player(340, 120, "AZ6", "blue")
-        self.mapa.add_player(340, 240, "AZ7", "blue")
-        self.mapa.add_player(340, 360, "AZ8", "blue")
-        self.mapa.add_player(340, 480, "AZ9", "blue")
-        self.mapa.add_player(500, 220, "AZ10", "blue")
-        self.mapa.add_player(500, 380, "AZ11", "blue")
+        # --- Configuração do Time Azul (AZ) ---
+        # Defesa e Goleiro
+        self.mapa.add_player(-40.0, 0.0, "AZ1", "blue")  # Goleiro
+        self.mapa.add_player(-25.0, 22.0, "AZ2", "blue")  # Lateral Esq
+        self.mapa.add_player(-25.0, 7.0, "AZ3", "blue")  # Zagueiro
+        self.mapa.add_player(-25.0, -7.0, "AZ4", "blue")  # Zagueiro
+        self.mapa.add_player(-25.0, -22.0, "AZ5", "blue")  # Lateral Dir
 
-        self.mapa.add_player(520, 300, "VM1", "red")
-        self.mapa.add_player(520, 90, "VM2", "red")
-        self.mapa.add_player(520, 230, "VM3", "red")
-        self.mapa.add_player(520, 370, "VM4", "red")
-        self.mapa.add_player(520, 510, "VM5", "red")
-        self.mapa.add_player(560, 120, "VM6", "red")
-        self.mapa.add_player(560, 240, "VM7", "red")
-        self.mapa.add_player(560, 360, "VM8", "red")
-        self.mapa.add_player(560, 380, "VM9", "red")
-        self.mapa.add_player(400, 220, "VM10", "red")
-        self.mapa.add_player(400, 380, "VM11", "red")
+        # Meio-Campo
+        self.mapa.add_player(5.0, 15.0, "AZ6", "blue")
+        self.mapa.add_player(5.0, 5.0, "AZ7", "blue")
+        self.mapa.add_player(5.0, -5.0, "AZ8", "blue")
+        self.mapa.add_player(5.0, -15.0, "AZ9", "blue")
+
+        # Ataque
+        self.mapa.add_player(35.0, 8.0, "AZ10", "blue")
+        self.mapa.add_player(35.0, -8.0, "AZ11", "blue")
+
+        # --- Configuração do Time Vermelho (VM) ---
+        # Defesa e Goleiro (Lado oposto, X positivo)
+        self.mapa.add_player(40.0, 0.0, "VM1", "red")  # Goleiro
+        self.mapa.add_player(25.0, 22.0, "VM2", "red")  # Lateral Esq
+        self.mapa.add_player(25.0, 7.0, "VM3", "red")  # Zagueiro
+        self.mapa.add_player(25.0, -7.0, "VM4", "red")  # Zagueiro
+        self.mapa.add_player(25.0, -22.0, "VM5", "red")  # Lateral Dir
+
+        # Meio-Campo / Volantes
+        self.mapa.add_player(10.0, 18.0, "VM6", "red")
+        self.mapa.add_player(10.0, 6.0, "VM7", "red")
+        self.mapa.add_player(10.0, -6.0, "VM8", "red")
+        self.mapa.add_player(10.0, -18.0, "VM9", "red")
+
+        # Ataque (Avançados no campo adversário, X negativo)
+        self.mapa.add_player(-20.0, 10.0, "VM10", "red")
+        self.mapa.add_player(-20.0, -10.0, "VM11", "red")
 
     def save_position(self):
         players = self.mapa.jogadores
