@@ -112,7 +112,6 @@ class App(ctk.CTk):
         msg = self.network.receive()
 
         if msg:
-            print(msg)
             # Filtro para Sense Body
             if msg.startswith("(sense_body"):
                 # Atualiza apenas a label específica
@@ -125,7 +124,7 @@ class App(ctk.CTk):
 
             # Mensagens que não são como essas
             else:
-                # print(msg)
+                print(msg)
                 pass
 
         # Executa esta função novamente após 50ms (Polling)
