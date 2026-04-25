@@ -1,10 +1,22 @@
-import socket as so
 import customtkinter as ctk
+import socket as so
 
+class AuxiliaryMessagingTool(ctk.CTk):
+    """
+    @brief Interface gráfica principal e Gerenciador de Rede UDP.
 
-class NetworkManager:
+    Exibe mensagens recebidas, permite envio de comandos via UDP e
+    gerencia comunicação UDP não bloqueante de forma integrada.
+    """
 
     def __init__(self, ip: str, port: int):
+        """
+        @brief Inicializa a aplicação e o gerenciador de rede.
+
+        @param ip Endereço IP do servidor.
+        @param port Porta do servidor.
+        """
+        # --- Lógica de Inicialização de Rede ---
         self.addr = (ip, port)
 
         self.sock = so.socket(
@@ -15,26 +27,7 @@ class NetworkManager:
         # threads na interface
         self.sock.setblocking(False)
 
-    def send(self, message: str) -> None:
-        self.sock.sendto(message.encode(), self.addr)
-
-    def receive(self) -> str | None:
-        try:
-            data, server = self.sock.recvfrom(4096)
-
-            # Atualização de porta
-            if server[1] != self.addr[1]:
-                self.addr = (self.addr[0], server[1])
-
-            return data.decode()
-
-        except (BlockingIOError, KeyboardInterrupt):
-            return None
-
-class App(ctk.CTk):
-    def __init__(self, network_manager):
-        self.network = network_manager
-
+        # --- Lógica de Inicialização de Interface ---
         super().__init__()
 
         self.title("AuxiliaryMessageTool")
@@ -92,8 +85,38 @@ class App(ctk.CTk):
         # Iniciar o loop de escuta
         self.update_hears()
 
+    def send(self, message: str) -> None:
+        """
+        @brief Envia uma mensagem UDP.
+
+        @param message Mensagem a ser enviada.
+        """
+        self.sock.sendto(message.encode(), self.addr)
+
+    def receive(self) -> str | None:
+        """
+        @brief Recebe uma mensagem UDP.
+
+        @return Mensagem decodificada ou None se não houver dados.
+        """
+        try:
+            data, server = self.sock.recvfrom(4096)
+
+            # Atualização de porta
+            if server[1] != self.addr[1]:
+                self.addr = (self.addr[0], server[1])
+
+            return data.decode()
+
+        except (BlockingIOError, KeyboardInterrupt):
+            return None
+
     def _on_resize(self, event):
-        """Atualiza a largura de quebra de linha com base na largura atual do frame."""
+        """
+        @brief Ajusta quebra de linha conforme redimensionamento.
+
+        @param event Evento de redimensionamento.
+        """
         # Subtraímos um pouco (ex: 40px) para dar margem nas laterais
         new_width = event.width - 40
         if new_width > 0:
@@ -101,15 +124,22 @@ class App(ctk.CTk):
             self.see_display.configure(wraplength=new_width)
 
     def send_command(self):
+        """
+        @brief Envia comando digitado pelo usuário.
+        """
         msg = self.cmd_entry.get()
         if msg:
-            self.network.send(msg + '\0')
+            self.send(msg + '\0')
             self.cmd_entry.delete(0, 'end')
 
     def update_hears(self):
-        """Checa o socket periodicamente sem travar a interface."""
+        """
+        @brief Atualiza mensagens recebidas periodicamente.
 
-        msg = self.network.receive()
+        Realiza polling do socket sem bloquear a interface.
+        """
+
+        msg = self.receive()
 
         if msg:
             # Filtro para Sense Body
@@ -130,8 +160,5 @@ class App(ctk.CTk):
         # Executa esta função novamente após 50ms (Polling)
         self.after(50, self.update_hears)
 
-
 if __name__ == "__main__":
-    network = NetworkManager("127.0.0.1", 6000)
-    app = App(network)
-    app.mainloop()
+    AuxiliaryMessagingTool("127.0.0.1", 6000).mainloop()

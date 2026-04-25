@@ -14,7 +14,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "../Booting.hpp"
+#include "../booting/Booting.hpp"
 
 class ServerComm {
 private:

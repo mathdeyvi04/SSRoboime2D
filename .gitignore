@@ -1,6 +1,7 @@
 .idea/
 logs/
 venv/
+__pycache__/
 
 main
 debug

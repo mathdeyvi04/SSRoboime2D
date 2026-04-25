@@ -1,7 +1,6 @@
 #pragma once
 
-#include <string_view>
-
+// Cuidado ao utilizar esses parâmetros
 namespace rcss {
     namespace server {
         // Distância máxima para audição de mensagens

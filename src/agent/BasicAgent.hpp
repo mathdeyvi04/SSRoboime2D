@@ -39,8 +39,8 @@ public:
      * @brief Teletransporta o agente para posição absoluta no campo. Também é capaz de
      * movimentar a cabeça do jogador
      *
-     * @param posx Coordenada X (-54 a 54)
-     * @param posy Coordenada Y (-32 a 32)
+     * @param posx Coordenada X (-52 a 52)
+     * @param posy Coordenada Y (-34 a 34)
      * @param angle_body Ângulo do corpo (graus)
      * @param angle_head Ângulo da cabeça (graus)
      *
