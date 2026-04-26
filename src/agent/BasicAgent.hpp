@@ -8,6 +8,7 @@
 
 #include "../communication/ServerComm.hpp"
 #include "../environment/Environment.hpp"
+#include "../booting/TacticalFormations.hpp"
 
 
 class BasicAgent {
