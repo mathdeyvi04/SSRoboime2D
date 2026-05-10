@@ -71,6 +71,237 @@ public:
     /** @brief Status de faltas. [0]: Ativo, [1]: Cartão tomado. */
     std::array<uint8_t, 2> fouls;
 
+    struct Point {
+        float a, b;
+    };
+    /**
+    0 até 54:flags
+        0 até 2:flags c*/
+    std::array<Point, 55> landmarks;
+    inline static int tokenstoid(char token1, char token2, char token3 = 0, char token4 = 0){
+        int id = 0;
+        switch(token1){
+            case 'f':{
+                switch(token2){
+                    case 'c':{
+                        switch(token3){
+                            case 't': id = 0;
+                            break;
+                            case 0: id = 1;
+                            break;
+                            case 'b': id = 2;
+                            break;
+                        }
+                        break;
+                    }
+                    case 'p':{
+                        switch(token3){
+                            case 'l':{
+                                switch(token4){
+                                    case 't': id = 3;
+                                    break;
+                                    case 'c': id = 4;
+                                    break;
+                                    case 'b': id = 5;
+                                    break;
+                                }
+                            }
+                            break;
+                            case 'r':{
+                                switch(token4){
+                                    case 't': id = 6;
+                                    break;
+                                    case 'c': id = 7;
+                                    break;
+                                    case 'b': id = 8;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                    case 'l':{
+                        switch(token3){
+                            case 't':{
+                                switch(token4){
+                                    case 0: id = 9;
+                                    break;
+                                    case '30': id = 10;
+                                    break
+                                    case '20': id = 11;
+                                    break;
+                                    case '10' ; id = 12;
+                                    break;
+                                }
+                            }
+                            break;
+                            case '0' : id = 13;
+                            break;
+                            case 'b':{
+                                switch(token4){
+                                    case '10': id = 14;
+                                    break;
+                                    case '20': id = 15;
+                                    break;
+                                    case '30': id = 16;
+                                    break;
+                                    case 0 : id = 17;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                    case 'r':{
+                        switch(token3){
+                            case 't':{
+                                switch(token4){
+                                    case 0 : id = 18;
+                                    break;
+                                    case '30': id = 19;
+                                    break;
+                                    case '20': id = 20;
+                                    break;
+                                    case '10': id = 21;
+                                    break;
+                                }
+                            }
+                            break;
+                            case '0': id = 22;
+                            break;
+                            case 'b':{
+                                switch(token4){
+                                    case '10': id = 23;
+                                    break;
+                                    case '20': id = 24;
+                                    break;
+                                    case '30': id = 25;
+                                    break;
+                                    case 0 : id = 26;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                    case 't':{
+                        switch(token3){
+                            case 'r':{
+                                switch(token4){
+                                    case '50': id = 27;
+                                    break;
+                                    case '40': id = 28;
+                                    break;
+                                    case '30': id = 29;
+                                    break;
+                                    case '20': id = 30;
+                                    break;
+                                    case '10': id = 31;
+                                    break;
+                                }
+                            }
+                            break;
+                            case '0': id = 32;
+                            break;
+                            case 'l':{
+                                switch(token4){
+                                    case '10': id = 33;
+                                    break;
+                                    case '20': id = 34;
+                                    break;
+                                    case '30': id = 35;
+                                    break;
+                                    case '40': id = 36;
+                                    break;
+                                    case '50': id = 37;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                    case 'b':{
+                        switch(token3){
+                            case 'r':{
+                                switch(token4){
+                                    case '50': id = 38;
+                                    break;
+                                    case '40': id = 39;
+                                    break;
+                                    case '30': id = 40;
+                                    break;
+                                    case '20': id = 41;
+                                    break;
+                                    case '10': id = 42;
+                                    break;
+                                }
+                            }
+                            break;
+                            case '0': id = 43;
+                            break;
+                            case 'l':{
+                                switch(token4){
+                                    case '10': id = 44;
+                                    break;
+                                    case '20': id = 45;
+                                    break;
+                                    case '30': id = 46;
+                                    break;
+                                    case '40': id = 47;
+                                    break;
+                                    case '50': id = 48;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                    case 'g':{
+                        switch(token3){
+                            case 'l':{
+                                switch(token4){
+                                    case 't': id = 49;
+                                    break;
+                                    case 'b': id = 50;
+                                    break;
+                                }
+                            }
+                            break;
+                            case 'r':{
+                                switch(token4){
+                                    case 't': id = 51;
+                                    break;
+                                    case 'b': id = 52;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                }
+                }
+            }
+            break;
+            case 'g':{
+                switch(token2){
+                    case 'l': id = 53;
+                    break;
+                    case 'r': id = 54;
+                }
+            }
+            break;
+        }
+    }
+
+
+
+
     class WorldParser {
     private:
 
@@ -388,7 +619,22 @@ public:
         }
 
         void parse_see(Environment& env) {
+            this->get_next_str();
+            while (true){
+                std::string_view token1 = this->get_next_str();
+                std::string_view token2 = this->get_next_str();
+                if(*this->cursor != ')'){
+                    std::string_view token3 = this->get_next_str();
+                    if(*this->cursor != ')'){
+                        std::string_view token4 = this->get_next_str();
+                    }
+                    Point& p = landmarks[tokenstoid(token1,token2)];
+                }
+                std::string_view token3 = this->get_next_str();
+                
+                this->cursor++;
 
+            }
         }
 
     public:
