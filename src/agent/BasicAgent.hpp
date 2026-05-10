@@ -28,8 +28,8 @@ public:
 
         // Teletransportamos o jogador para a posição correta
         this->beam(
-            -54 + (rand() % 55), // Restrito ao Booting
-            -32 + (rand() % 65), // Restrito ao Booting
+            TacticalFormations::Default[2 * this->__env.unum - 2], // Restrito ao Booting
+            TacticalFormations::Default[2 * this->__env.unum - 2 + 1], // Restrito ao Booting
             // Inicialmente, vamos apenas passar 0 para left e 180 para right
             0,
             0
@@ -47,7 +47,7 @@ public:
      *
      * @note Executa 3 comandos: move (teletransporte), turn (corpo), turn_neck (cabeça)
      */
-    void beam(int posx, int posy, int angle_body = 0, int angle_head = 0){
+    void beam(double posx, double posy, int angle_body = 0, int angle_head = 0){
         // Teletransportamos o corpo
         this->__sc.send_immediate(
             std::format(

@@ -9,10 +9,12 @@
 #include <iostream>
 
 #include "../booting/Booting.hpp"
+#include "../logger/Logger.hpp"
 
 class Environment {
 public:
 
+    Logger& logger = Logger::get();
     enum class PlayMode : uint8_t {
         // Neutros
         BEFORE_KICK_OFF = 0b0000'0000,
@@ -448,6 +450,7 @@ public:
 
                             case 12: { // server_param
 
+                                env.logger.warn("Uppest_Tag Unknown: {}", uppest_tag);
                                 this->skip_unknown();
                                 break;
                             }
@@ -458,6 +461,7 @@ public:
 
                     case 'p': { // player_param player_type
 
+                        env.logger.warn("Uppest_Tag Unknown: {}", uppest_tag);
                         this->skip_unknown();
                         break;
                     }
@@ -469,8 +473,8 @@ public:
                     }
 
                     default:
+                        env.logger.warn("Uppest_Tag Unknown: {}", uppest_tag);
                         this->skip_unknown();
-                        std::cout << "Tag Desconhecida: " << uppest_tag << std::endl;
                 }
 
             }

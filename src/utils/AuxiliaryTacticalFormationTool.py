@@ -284,7 +284,7 @@ class AuxiliaryTacticalFormationTool(ctk.CTk):
         ) as f:
             f.write("#pragma once\n\n// Deve seguir exatamente o padrão que colocamos\nnamespace TacticalFormations {\n")
             for name_of_formation in self.total_formations:
-                f.write(f"\tinline constexpr int {name_of_formation}[] = ")
+                f.write(f"\tinline constexpr double {name_of_formation}[] = ")
                 f.write("{\n")
                 for xpos, ypos in self.total_formations[name_of_formation]:
                     f.write(f"\t\t{xpos}, {ypos},\n")

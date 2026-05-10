@@ -7,6 +7,6 @@ namespace Booting {
     inline constexpr int   PORTSERVER = 6000;
 
     // Configurações de ServerComm
-    inline constexpr int SIZEBUFFER = 512;
+    inline constexpr int SIZEBUFFER = 4096;
     inline constexpr int TIMEOUTSOCKETSERVER = 50; // Em milisegundos
 }

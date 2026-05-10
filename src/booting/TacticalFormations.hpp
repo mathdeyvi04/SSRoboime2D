@@ -2,7 +2,7 @@
 
 // Deve seguir exatamente o padrão que colocamos
 namespace TacticalFormations {
-	inline constexpr int Default[] = {
+	inline constexpr double Default[] = {
 		-33.17141941169382, -25.62993762994164,
 		-33.17141941169382, -12.823284823286832,
 		-33.17141941169382, -0.01663201663202301,
