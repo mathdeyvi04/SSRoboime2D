@@ -6,6 +6,7 @@
 #include <utility>
 #include <array>
 #include <charconv>
+#include <algorithm>
 #include <iostream>
 
 #include "../booting/Booting.hpp"
@@ -28,7 +29,7 @@ public:
     inline static bool is_left = false;
     inline static int cycle    = 0;
 
-    inline static const std::optional<Environment::PlayMode> get_play_mode(const std::string_view& key) {
+    inline static std::optional<Environment::PlayMode> get_play_mode(const std::string_view& key) {
         static constexpr std::array <
             std::pair<std::string_view, std::array<Environment::PlayMode, 2>>, 2
         > dict_play_modes = {{
@@ -71,241 +72,127 @@ public:
     /** @brief Status de faltas. [0]: Ativo, [1]: Cartão tomado. */
     std::array<uint8_t, 2> fouls;
 
-    struct Point {
-        float a, b;
-    };
     /**
-    0 até 54:flags
-        0 até 2:flags c*/
-    std::array<Point, 55> landmarks;
-    inline static int tokenstoid(char token1, char token2, char token3 = 0, char token4 = 0){
-        int id = 0;
-        switch(token1){
-            case 'f':{
-                switch(token2){
-                    case 'c':{
-                        switch(token3){
-                            case 't': id = 0;
-                            break;
-                            case 0: id = 1;
-                            break;
-                            case 'b': id = 2;
-                            break;
-                        }
-                        break;
-                    }
-                    case 'p':{
-                        switch(token3){
-                            case 'l':{
-                                switch(token4){
-                                    case 't': id = 3;
-                                    break;
-                                    case 'c': id = 4;
-                                    break;
-                                    case 'b': id = 5;
-                                    break;
-                                }
-                            }
-                            break;
-                            case 'r':{
-                                switch(token4){
-                                    case 't': id = 6;
-                                    break;
-                                    case 'c': id = 7;
-                                    break;
-                                    case 'b': id = 8;
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                    break;
-                    case 'l':{
-                        switch(token3){
-                            case 't':{
-                                switch(token4){
-                                    case 0: id = 9;
-                                    break;
-                                    case '30': id = 10;
-                                    break
-                                    case '20': id = 11;
-                                    break;
-                                    case '10' ; id = 12;
-                                    break;
-                                }
-                            }
-                            break;
-                            case '0' : id = 13;
-                            break;
-                            case 'b':{
-                                switch(token4){
-                                    case '10': id = 14;
-                                    break;
-                                    case '20': id = 15;
-                                    break;
-                                    case '30': id = 16;
-                                    break;
-                                    case 0 : id = 17;
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                    break;
-                    case 'r':{
-                        switch(token3){
-                            case 't':{
-                                switch(token4){
-                                    case 0 : id = 18;
-                                    break;
-                                    case '30': id = 19;
-                                    break;
-                                    case '20': id = 20;
-                                    break;
-                                    case '10': id = 21;
-                                    break;
-                                }
-                            }
-                            break;
-                            case '0': id = 22;
-                            break;
-                            case 'b':{
-                                switch(token4){
-                                    case '10': id = 23;
-                                    break;
-                                    case '20': id = 24;
-                                    break;
-                                    case '30': id = 25;
-                                    break;
-                                    case 0 : id = 26;
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                    break;
-                    case 't':{
-                        switch(token3){
-                            case 'r':{
-                                switch(token4){
-                                    case '50': id = 27;
-                                    break;
-                                    case '40': id = 28;
-                                    break;
-                                    case '30': id = 29;
-                                    break;
-                                    case '20': id = 30;
-                                    break;
-                                    case '10': id = 31;
-                                    break;
-                                }
-                            }
-                            break;
-                            case '0': id = 32;
-                            break;
-                            case 'l':{
-                                switch(token4){
-                                    case '10': id = 33;
-                                    break;
-                                    case '20': id = 34;
-                                    break;
-                                    case '30': id = 35;
-                                    break;
-                                    case '40': id = 36;
-                                    break;
-                                    case '50': id = 37;
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                    break;
-                    case 'b':{
-                        switch(token3){
-                            case 'r':{
-                                switch(token4){
-                                    case '50': id = 38;
-                                    break;
-                                    case '40': id = 39;
-                                    break;
-                                    case '30': id = 40;
-                                    break;
-                                    case '20': id = 41;
-                                    break;
-                                    case '10': id = 42;
-                                    break;
-                                }
-                            }
-                            break;
-                            case '0': id = 43;
-                            break;
-                            case 'l':{
-                                switch(token4){
-                                    case '10': id = 44;
-                                    break;
-                                    case '20': id = 45;
-                                    break;
-                                    case '30': id = 46;
-                                    break;
-                                    case '40': id = 47;
-                                    break;
-                                    case '50': id = 48;
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                    break;
-                    case 'g':{
-                        switch(token3){
-                            case 'l':{
-                                switch(token4){
-                                    case 't': id = 49;
-                                    break;
-                                    case 'b': id = 50;
-                                    break;
-                                }
-                            }
-                            break;
-                            case 'r':{
-                                switch(token4){
-                                    case 't': id = 51;
-                                    break;
-                                    case 'b': id = 52;
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                    }
-                    break;
-                }
-                }
-            }
-            break;
-            case 'g':{
-                switch(token2){
-                    case 'l': id = 53;
-                    break;
-                    case 'r': id = 54;
-                }
-            }
-            break;
-        }
+     * @brief Empacota até 4 caracteres em um único inteiro de 32 bits.
+     * token1 -> byte mais significativo
+     * token4 -> byte menos significativo
+     * @return Valor de 32 bits contendo os caracteres empacotados.
+     */
+    inline static constexpr uint32_t pack(const char& token1, const char& token2 = 0, const char& token3 = 0, const char& token4 = 0) {
+        return (static_cast<uint32_t>(token1) << 24) |
+               (static_cast<uint32_t>(token2) << 16) |
+               (static_cast<uint32_t>(token3) << 8)  |
+               (static_cast<uint32_t>(token4));
     }
-
-
-
+    /**
+     * @brief Converte uma sequência de até 4 tokens em um index compacto.
+     * @details
+     * Realiza o empacotamento dos tokens utilizando Environment::pack()
+     * e busca o valor correspondente na tabela estática de flags.
+     * @return ID correspondente no intervalo [0, 59].
+     * @return 255 caso a sequência não exista na tabela.
+     */
+    inline static uint8_t tokenstoid(const char& token1, const char& token2 = 0, const char& token3 = 0, const char& token4 = 0) {
+        static constexpr std::array<uint32_t, 60> flagtable = {
+            Environment::pack('b'),                    // 0
+            Environment::pack('f', 'b', '0'),          // 1
+            Environment::pack('f', 'b', 'l', '1'),     // 2
+            Environment::pack('f', 'b', 'l', '2'),     // 3
+            Environment::pack('f', 'b', 'l', '3'),     // 4
+            Environment::pack('f', 'b', 'l', '4'),     // 5
+            Environment::pack('f', 'b', 'l', '5'),     // 6
+            Environment::pack('f', 'b', 'r', '1'),     // 7
+            Environment::pack('f', 'b', 'r', '2'),     // 8
+            Environment::pack('f', 'b', 'r', '3'),     // 9
+            Environment::pack('f', 'b', 'r', '4'),     // 10
+            Environment::pack('f', 'b', 'r', '5'),     // 11
+            Environment::pack('f', 'c'),               // 12
+            Environment::pack('f', 'c', 'b'),          // 13
+            Environment::pack('f', 'c', 't'),          // 14
+            Environment::pack('f', 'g', 'l', 'b'),     // 15
+            Environment::pack('f', 'g', 'l', 't'),     // 16
+            Environment::pack('f', 'g', 'r', 'b'),     // 17
+            Environment::pack('f', 'g', 'r', 't'),     // 18
+            Environment::pack('f', 'l', '0'),          // 19
+            Environment::pack('f', 'l', 'b'),          // 20
+            Environment::pack('f', 'l', 'b', '1'),     // 21
+            Environment::pack('f', 'l', 'b', '2'),     // 22
+            Environment::pack('f', 'l', 'b', '3'),     // 23
+            Environment::pack('f', 'l', 't'),          // 24
+            Environment::pack('f', 'l', 't', '1'),     // 25
+            Environment::pack('f', 'l', 't', '2'),     // 26
+            Environment::pack('f', 'l', 't', '3'),     // 27
+            Environment::pack('f', 'p', 'l', 'b'),     // 28
+            Environment::pack('f', 'p', 'l', 'c'),     // 29
+            Environment::pack('f', 'p', 'l', 't'),     // 30
+            Environment::pack('f', 'p', 'r', 'b'),     // 31
+            Environment::pack('f', 'p', 'r', 'c'),     // 32
+            Environment::pack('f', 'p', 'r', 't'),     // 33
+            Environment::pack('f', 'r', '0'),          // 34
+            Environment::pack('f', 'r', 'b'),          // 35
+            Environment::pack('f', 'r', 'b', '1'),     // 36
+            Environment::pack('f', 'r', 'b', '2'),     // 37
+            Environment::pack('f', 'r', 'b', '3'),     // 38
+            Environment::pack('f', 'r', 't'),          // 39
+            Environment::pack('f', 'r', 't', '1'),     // 40
+            Environment::pack('f', 'r', 't', '2'),     // 41
+            Environment::pack('f', 'r', 't', '3'),     // 42
+            Environment::pack('f', 't', '0'),          // 43
+            Environment::pack('f', 't', 'l', '1'),     // 44
+            Environment::pack('f', 't', 'l', '2'),     // 45
+            Environment::pack('f', 't', 'l', '3'),     // 46
+            Environment::pack('f', 't', 'l', '4'),     // 47
+            Environment::pack('f', 't', 'l', '5'),     // 48
+            Environment::pack('f', 't', 'r', '1'),     // 49
+            Environment::pack('f', 't', 'r', '2'),     // 50
+            Environment::pack('f', 't', 'r', '3'),     // 51
+            Environment::pack('f', 't', 'r', '4'),     // 52
+            Environment::pack('f', 't', 'r', '5'),     // 53
+            Environment::pack('g', 'l'),               // 54
+            Environment::pack('g', 'r'),               // 55
+            Environment::pack('l', 'b', '0'),          // 56
+            Environment::pack('l', 'l', '0'),          // 57
+            Environment::pack('l', 'r', '0'),          // 58
+            Environment::pack('l', 't', '0'),          // 59
+        };
+        uint32_t target = Environment::pack(token1, token2, token3, token4);
+        // Busca Binária safamente
+        auto it = std::lower_bound(
+            flagtable.begin(),
+            flagtable.end(),
+            target
+        );
+        if (it != flagtable.end() && *it == target) {
+            // Retorna a distância do início, que é o seu index no array
+            return static_cast<uint8_t>(std::distance(flagtable.begin(), it));
+        }
+        return 255;
+    }
+    /** @brief Struct que representará pontos observados pelo jogador */
+    struct Point {
+        std::array<float, 4> attrs;
+        float& operator[](const int& i){
+            return this->attrs[i];
+        }
+        /* Acredito que seja bom deixarmos em struct para posterior adição de funcionalidades */
+    };
+    /** @brief Array que armazenará todas os pontos possíveis e seus respectivos dados */
+    std::array<Point, 60 + 11 * 2> points_on_the_field = {
+        /* Bola */
+        /* Landmarks */
+        /* Players */
+    };
+    /** @brief Array que  armazenará o index de todos os pontos vísiveis no momento */
+    std::array<uint8_t, 60 + 11 * 2> visibles_index;
+    /** @brief Variável que nos possibilitará não apagar e repopular array sempre */
+    uint8_t number_visibles = 0;
 
     class WorldParser {
     private:
 
+        /** @brief Atributo que marca o ponto da mensagem que está sendo lido */
         const char* cursor = nullptr;
+        /** @brief Marcador do final da mensagem */
         const char* end    = nullptr;
 
         /**
@@ -618,22 +505,81 @@ public:
             }
         }
 
+        /**
+         * @brief Processa a mensagem `(see)` do servidor.
+         *
+         * Extrai os objetos visíveis, converte seus tokens em IDs internos
+         * e atualiza os atributos dos pontos visualizados no ambiente.
+         *
+         * @param env Ambiente que receberá os dados processados.
+         */
         void parse_see(Environment& env) {
             this->get_next_str();
-            while (true){
-                std::string_view token1 = this->get_next_str();
-                std::string_view token2 = this->get_next_str();
-                if(*this->cursor != ')'){
-                    std::string_view token3 = this->get_next_str();
-                    if(*this->cursor != ')'){
-                        std::string_view token4 = this->get_next_str();
-                    }
-                    Point& p = landmarks[tokenstoid(token1,token2)];
-                }
-                std::string_view token3 = this->get_next_str();
-                
-                this->cursor++;
+            std::array<char, 4> tokens;
+            env.number_visibles = 0;
+            while(true) {
+                this->cursor += 2;
+                uint8_t number_tokens = 0;
+                while(*(this->cursor++) != ')') {
 
+                    /* Caso venha um jogador, tudo muda.
+                    O tratamento acontece aqui, pois não há a consistência de vir apenas 1 caractere ou não.
+                    */
+                    if(*this->cursor == 'p') {
+                        /* Resolver Lógica de Como Captar Jogadores */
+                        break;
+                    }
+
+                    tokens[number_tokens] = *this->cursor;
+                    number_tokens++;
+                    this->cursor++;
+                    if(*this->cursor == '0') {
+                        // Pelo menos saberemos que acabou
+                        this->cursor += 2;
+                        break;
+                    }
+                }
+
+                /* Falta introduzirmos a lógica de indexs relativos aos jogadores */
+                uint8_t index = Environment::tokenstoid(
+                    tokens[0],
+                    (number_tokens >= 2) ? tokens[1] : 0,
+                    (number_tokens >= 3) ? tokens[2] : 0,
+                    (number_tokens >= 4) ? tokens[3] : 0
+                );
+
+                if(index == 255) {
+                    // Não encontrado
+                    env.logger.warn(
+                        "Conjunto Inválido em parse_see: ({}, {}, {}, {}",
+                        tokens[0],
+                        (number_tokens >= 2) ? tokens[1] : 0,
+                        (number_tokens >= 3) ? tokens[2] : 0,
+                        (number_tokens >= 4) ? tokens[3] : 0
+                    );
+                    this->skip_until_char(')');
+                    continue;
+                }
+
+                // Então o ponto existe e foi visualizado
+                env.visibles_index[env.number_visibles++] = index;
+                Environment::Point& point = env.points_on_the_field[index];
+
+                uint8_t i = 0;
+                while(*this->cursor != ')') {
+                    std::string_view str_value = this->get_next_str();
+                    std::from_chars(
+                        str_value.data(),
+                        str_value.data() + str_value.size(),
+                        point[i++]
+                    );
+                }
+                while(i != point.attrs.size()) {
+                    // Quando não tiver os valores para atualizar, apenas diremos que se trata de -1.
+                    point[i++] = -1;
+                }
+
+                this->cursor++;
             }
         }
 
