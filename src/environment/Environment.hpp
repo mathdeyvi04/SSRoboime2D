@@ -7,7 +7,6 @@
 #include <array>
 #include <charconv>
 #include <algorithm>
-#include <iostream>
 
 #include "../booting/Booting.hpp"
 #include "../logger/Logger.hpp"
@@ -155,6 +154,16 @@ public:
             Environment::pack('l', 'r', '0'),          // 58
             Environment::pack('l', 't', '0'),          // 59
         };
+
+        // Caso seja para obtermos o index correspondente a um jogador
+        if(token1 == 'p') {
+            /* As seguintes parcelas representam:
+            60          -> 0...59 representam a bola e as flags de campo, logo a primeira posição válida é 60.
+            token2 * 11 -> Caso sejam aliados, token2 = 0. Logo, os primeiros slots são para alieados. Mesma lógica para adversários.
+            token3 - 1  -> número do jogador representará sua posição no array
+            */
+            return 60 + (token2 * 11) + (token3 - 1);
+        }
         uint32_t target = Environment::pack(token1, token2, token3, token4);
         // Busca Binária safamente
         auto it = std::lower_bound(
@@ -187,6 +196,9 @@ public:
     /** @brief Variável que nos possibilitará não apagar e repopular array sempre */
     uint8_t number_visibles = 0;
 
+    /**
+     * @brief Agrupa todas as funcionalidades de interpretação das mensagens do servidor.
+     */
     class WorldParser {
     private:
 
@@ -232,12 +244,11 @@ public:
         }
 
         /**
-         * @brief Avança o cursor ignorando blocos aninhados "()" desconhecidos.
+         * @brief Avança o cursor ignorando blocos aninhados "()" desconhecidos até fechar quantidade de '(' abertos inicialmente.
+         * @details Não verifica se chegou ao final da string, o que corrobora Segmentation Fault
          * @param init_count Número inicial de pares a ignorar (padrão=1).
          */
         void skip_unknown(uint8_t init_count = 1) {
-            // Vamos considerar que acabamos de encontrar uma tag desconhecida, ou seja passamos por '('.
-            // Devemos encontrar outro ')' para eliminar este e, finalmente, encerrar a função.
 
             uint8_t count_pair = init_count;
             while(count_pair != 0) {
@@ -247,17 +258,17 @@ public:
         }
 
         /**
-         * @brief Interpreta mensagem "(sense_body)" do servidor.
+         * @brief Interpreta mensagem `sense_body` do servidor.
          *
          * @param env Ambiente onde os dados serão armazenados.
          *
          * @details Processa:
-         * - view_mode
-         * - stamina, speed, head_angle
-         * - arm
-         * - focus
-         * - foul
-         * - focus_point
+         * - `view_mode`
+         * - `stamina`, `speed`, `head_angle`
+         * - `arm`
+         * - `focus`
+         * - `foul`
+         * - `focus_point`
          */
         void parse_sensebody(Environment& env) {
 
@@ -266,37 +277,27 @@ public:
             if(env.unum == 1) {
                 std::from_chars(str_cycle.data(), str_cycle.data() + str_cycle.size(), Environment::cycle);
             }
-
             while(true) {
 
                 std::string_view lower_tag = this->get_next_str();
-
                 switch(lower_tag[0]) {
-                    case 'v': { // view_mode
-                        this->cursor += 1;
+                    case 'v': { // `view_mode`
+
+                        // Informação da qualidade da visão: `low` ou `high`
+                        env.view_mode[0] = *(++this->cursor) == 'l';
+                        this->cursor += 6 - env.view_mode[0];
+
+                        // Informação de visão angular
                         switch(*this->cursor) {
-                            case 'h': {
-                                env.view_mode[0] = 0;
-                                this->cursor += 4;
-                                break;
-                            }
-                            case 'l': {
-                                env.view_mode[0] = 1;
-                                this->cursor += 3;
-                                break;
-                            }
-                        }
-                        this->cursor += 2;
-                        switch(*this->cursor) {
-                            case 'a': { // narrow
+                            case 'a': { // `narrow`
                                 env.view_mode[1] = 0;
                                 break;
                             }
-                            case 'o': { // normal
+                            case 'o': { // `normal`
                                 env.view_mode[1] = 1;
                                 break;
                             }
-                            case 'i': { // wide
+                            case 'i': { // `wide`
                                 env.view_mode[1] = 2;
                                 break;
                             }
@@ -304,8 +305,8 @@ public:
                         this->skip_until_char(')');
                         break;
                     }
-
                     case 's': { // stamina speed
+
                         if(lower_tag[1] == 't') {
                             for(auto& elemento : env.stamina_info) {
                                 std::string_view str_value = this->get_next_str();
@@ -329,7 +330,8 @@ public:
                         this->skip_until_char(')');
                         break;
                     }
-                    case 'h': { // head_angle
+                    case 'h': { // `head_angle`
+
                         std::string_view str_head_angle = this->get_next_str();
                         std::from_chars(
                             str_head_angle.data(),
@@ -337,9 +339,11 @@ public:
                             env.head_angle
                         );
                         this->cursor++;
-                        /* Sabemos que agora vem os ActionCounters */
-                        /* Como são informações inúteis, vamos apenas
-                           pulá-los                                */
+
+                        /* Sabemos que agora vem os ActionCounters
+                        Como são informações inúteis, vamos apenas
+                        pulá-los
+                        */
                         float total_actioncounters = 9.0;
                         while(total_actioncounters) {
                             if(*this->cursor == '(' || *this->cursor == ')') {
@@ -349,10 +353,12 @@ public:
                         }
                         break;
                     }
-                    case 'a': { // arm
+                    case 'a': { // `arm`
+
                         for(uint8_t i = 0; i < 3; ++i) {
+
                             std::string_view str_value = this->get_next_str();
-                            if(str_value[0] == 't') { // target
+                            if(str_value[0] == 't') { // `target`
                                 str_value = this->get_next_str();
                                 std::from_chars(
                                     str_value.data(),
@@ -366,7 +372,7 @@ public:
                                     env.arm[++i]
                                 );
                             }
-                            else { // movable expires
+                            else { // `movable` `expires`
                                 str_value = this->get_next_str();
                                 std::from_chars(
                                     str_value.data(),
@@ -380,31 +386,32 @@ public:
                         this->skip_unknown();
                         break;
                     }
-                    case 'f': {
+                    case 'f': { // `focus`
                         switch(lower_tag.size()) {
-                            case 5: { // focus
-                                // Pulamos o próximo nome, pois sabemos que é target
+                            case 5: { // `focus`
+
+                                // Pular o próximo nome, pois sabe-se que é target
                                 this->get_next_str();
-                                // Vamos ao objeto de foco
+                                // Obter o objeto de foco
                                 std::string_view str_value = this->get_next_str();
                                 switch(str_value[2]) {
-                                    case 'n': { // none
+                                    case 'n': { // `none`
+
+                                        env.focus[0] = 0;
                                         this->cursor++;
                                         break;
                                     }
+                                    case 'l': { // `ball`
 
-                                    case 'l': { // ball
                                         env.focus[0] = 1;
                                         this->cursor++;
                                         break;
                                     }
-
-                                    case 'a': { // player
+                                    case 'a': { // `player`
 
                                         env.focus[0] = 2;
-                                        this->cursor++;
                                         env.focus[1] = (
-                                            (*this->cursor == 'r') && Environment::is_left
+                                            (*(this->cursor++) == 'r') && Environment::is_left
                                         ) ? 1 : -1;
                                         this->cursor++;
                                         str_value = this->get_next_str();
@@ -416,8 +423,7 @@ public:
                                         this->cursor += 2;
                                         break;
                                     }
-
-                                    case 'i': { // point
+                                    case 'i': { // `point`
 
                                         env.focus[0] = 3;
                                         std::string_view str_value = this->get_next_str();
@@ -449,25 +455,26 @@ public:
                                 this->skip_unknown();
                                 break;
                             }
-                            case 4: { // foul
-                                // charged
+                            case 4: { // `foul`
+
+                                // Captação de Faltas Recentes
                                 this->get_next_str();
                                 this->cursor++;
                                 env.fouls[0] = *(this->cursor++) - 48;
                                 this->cursor++;
-                                // card
+                                // Cor de Cartão
                                 this->get_next_str();
                                 std::string_view str_value = this->get_next_str();
                                 switch(str_value[0]) {
-                                    case 'n': {
+                                    case 'n': { // `none`
                                         env.fouls[1] = 0;
                                         break;
                                     }
-                                    case 'y': {
+                                    case 'y': { // `yellow`
                                         env.fouls[1] = 1;
                                         break;
                                     }
-                                    case 'r': {
+                                    case 'r': { // `red`
                                         env.fouls[1] = 2;
                                         break;
                                     }
@@ -475,8 +482,7 @@ public:
                                 this->cursor += 3;
                                 break;
                             }
-
-                            case 11: { // focus_point
+                            case 11: { // `focus_point`
                                 std::string_view str_value = this->get_next_str();
                                 std::from_chars(
                                     str_value.data(),
@@ -496,7 +502,7 @@ public:
                         break;
                     }
                     default: {
-                        if(lower_tag.size() == 0) {
+                        if(!lower_tag.size()) {
                             return;
                         }
                         break;
@@ -506,33 +512,53 @@ public:
         }
 
         /**
-         * @brief Processa a mensagem `(see)` do servidor.
-         *
+         * @brief Processa a mensagem `see` do servidor.
+         * @details
          * Extrai os objetos visíveis, converte seus tokens em IDs internos
          * e atualiza os atributos dos pontos visualizados no ambiente.
          *
          * @param env Ambiente que receberá os dados processados.
          */
         void parse_see(Environment& env) {
+
             this->get_next_str();
-            std::array<char, 4> tokens;
+            // Reiniciamos as variáveis necessárias
             env.number_visibles = 0;
-            while(true) {
+            std::array<char, 4> tokens;
+            while(*this->cursor != ')') {
+
+                /* Obter de tokens */
                 this->cursor += 2;
                 uint8_t number_tokens = 0;
                 while(*(this->cursor++) != ')') {
 
-                    /* Caso venha um jogador, tudo muda.
-                    O tratamento acontece aqui, pois não há a consistência de vir apenas 1 caractere ou não.
-                    */
-                    if(*this->cursor == 'p') {
-                        /* Resolver Lógica de Como Captar Jogadores */
+                    // Caso seja informações de jogador
+                    if(*this->cursor == 'p' && !number_tokens) {
+                        tokens[number_tokens++] = *(this->cursor++);
+                        while(*this->cursor != ')') {
+                            std::string_view str_value = this->get_next_str();
+
+                            if(number_tokens == 1) {
+                                str_value.remove_prefix(1);
+                                str_value.remove_suffix(1);
+                                // Caso seja inimigo, recebe 1. Caso aliado, recebe 0
+                                tokens[number_tokens++] = str_value != Booting::TEAMNAME;
+                                continue;
+                            }
+
+                            if(number_tokens == 2) {
+                                // Última informação útil
+                                tokens[number_tokens++] = static_cast<char>(std::atoi(str_value.data()));
+                                // Não importa se é goalie
+                                this->skip_until_char(')');
+                                break;
+                            }
+                        }
                         break;
                     }
 
-                    tokens[number_tokens] = *this->cursor;
-                    number_tokens++;
-                    this->cursor++;
+                    // Caso não seja jogador, será ou flag de campo ou bola, que vem apenas em caracteres simples
+                    tokens[number_tokens++] = *(this->cursor++);
                     if(*this->cursor == '0') {
                         // Pelo menos saberemos que acabou
                         this->cursor += 2;
@@ -540,7 +566,6 @@ public:
                     }
                 }
 
-                /* Falta introduzirmos a lógica de indexs relativos aos jogadores */
                 uint8_t index = Environment::tokenstoid(
                     tokens[0],
                     (number_tokens >= 2) ? tokens[1] : 0,
@@ -548,10 +573,10 @@ public:
                     (number_tokens >= 4) ? tokens[3] : 0
                 );
 
+                // Caso a flag não exista
                 if(index == 255) {
-                    // Não encontrado
                     env.logger.warn(
-                        "Conjunto Inválido em parse_see: ({}, {}, {}, {}",
+                        "Conjunto Inválido em parse_see: ({}, {}, {}, {})",
                         tokens[0],
                         (number_tokens >= 2) ? tokens[1] : 0,
                         (number_tokens >= 3) ? tokens[2] : 0,
@@ -562,9 +587,10 @@ public:
                 }
 
                 // Então o ponto existe e foi visualizado
-                env.visibles_index[env.number_visibles++] = index;
                 Environment::Point& point = env.points_on_the_field[index];
+                env.visibles_index[env.number_visibles++] = index;
 
+                /* Começamos a obtenção das informações do ponto observado */
                 uint8_t i = 0;
                 while(*this->cursor != ')') {
                     std::string_view str_value = this->get_next_str();
@@ -575,8 +601,8 @@ public:
                     );
                 }
                 while(i != point.attrs.size()) {
-                    // Quando não tiver os valores para atualizar, apenas diremos que se trata de -1.
-                    point[i++] = -1;
+                    // Quando não tiver os valores para atualizar, apenas diremos que se trata de um valor específico
+                    point[i++] = 99;
                 }
 
                 this->cursor++;
@@ -585,6 +611,9 @@ public:
 
     public:
 
+        /**
+         * @brief A partir de mensagens do servidor, atualizará os dados do ambiente.
+         */
         void update_from_server(
             const std::string_view& message_from_server,
             Environment& env
@@ -593,6 +622,7 @@ public:
             this->cursor = message_from_server.data();
             this->end    = message_from_server.data() + message_from_server.size();
 
+            /* Processamento da Mensagem */
             while(this->cursor < this->end) {
 
                 if(!this->skip_until_char('(')) {
@@ -615,10 +645,11 @@ public:
                         std::string_view possible_mode = this->get_next_str();
                         std::optional<Environment::PlayMode> result_from_search = Environment::get_play_mode(possible_mode);
                         if(result_from_search.has_value()) {
+                            // std::move para não haver cópia
                             Environment::pm = std::move(result_from_search.value());
                         }
                         else {
-                            std::cout << "Modo Desconhecido: " << possible_mode << std::endl;
+                            env.logger.warn("Mode Unknown: {}", possible_mode);
                         }
 
                         break;
@@ -641,10 +672,7 @@ public:
                             }
 
                             case 12: { // server_param
-
-                                env.logger.warn("Uppest_Tag Unknown: {}", uppest_tag);
-                                this->skip_unknown();
-                                break;
+                                return; // Vamos apenas pular essa mensagem
                             }
                         }
 
@@ -652,23 +680,18 @@ public:
                     }
 
                     case 'p': { // player_param player_type
-
-                        env.logger.warn("Uppest_Tag Unknown: {}", uppest_tag);
-                        this->skip_unknown();
-                        break;
+                        return; // Vamos apenas pular essa mensagem
                     }
 
                     case 'o': { // ok
-
-                        this->skip_unknown();
-                        break;
+                        return; // Vamos apenas pular essa mensagem
                     }
 
                     default:
                         env.logger.warn("Uppest_Tag Unknown: {}", uppest_tag);
-                        this->skip_unknown();
+                        // Como trata-se de uma tag superior desconhecida, podemos apenas jogar o restante fora
+                        return;
                 }
-
             }
 
             // Retornarmos seus valores ao nulo para evitar qualquer descuido
