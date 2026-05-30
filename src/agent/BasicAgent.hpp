@@ -76,7 +76,10 @@ public:
         );
     }
 
-    void run() {
+    int run() {
+        if(this->__sc.isclosed()) {
+            return 1;
+        }
         // Recebemos algo do servidor
         std::string_view message_from_server = this->__sc.receive();
 
@@ -85,6 +88,7 @@ public:
 
         // Tomamos alguma decisão
 
+        return 0;
     }
 
 

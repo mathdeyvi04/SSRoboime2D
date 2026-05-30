@@ -92,6 +92,7 @@ public:
      * @return 255 caso a sequência não exista na tabela.
      */
     inline static uint8_t tokenstoid(const char& token1, const char& token2 = 0, const char& token3 = 0, const char& token4 = 0) {
+        // NÃO PROVEMOS INFORMAÇÕES DE LINHAAAAAAAAAAS
         static constexpr std::array<uint32_t, 60> flagtable = {
             Environment::pack('b'),                    // 0
             Environment::pack('f', 'b', '0'),          // 1
@@ -525,11 +526,12 @@ public:
             // Reiniciamos as variáveis necessárias
             env.number_visibles = 0;
             std::array<char, 4> tokens;
-            while(*this->cursor != ')') {
+            uint8_t number_tokens = 0;
+            while(*this->cursor != ')' && (this->cursor + 2) < this->end) {
 
                 /* Obter de tokens */
                 this->cursor += 2;
-                uint8_t number_tokens = 0;
+                number_tokens = 0;
                 while(*(this->cursor++) != ')') {
 
                     // Caso seja informações de jogador
@@ -548,6 +550,7 @@ public:
 
                             if(number_tokens == 2) {
                                 // Última informação útil
+                                // Tô achando que isso aqui está quebrando performance, pois transforma em string
                                 tokens[number_tokens++] = static_cast<char>(std::atoi(str_value.data()));
                                 // Não importa se é goalie
                                 this->skip_until_char(')');
@@ -564,6 +567,16 @@ public:
                         this->cursor += 2;
                         break;
                     }
+                }
+
+                // Não somente os jogadores, mas há a possibilidades de flags virem
+                // sem identificação
+                if(number_tokens < 2 || (number_tokens < 3 && tokens[0] == 'p')) {
+                    if(tokens[0] == 'p') {
+                        this->cursor++;
+                    }
+                    this->skip_until_char(')');
+                    continue;
                 }
 
                 uint8_t index = Environment::tokenstoid(
@@ -599,14 +612,31 @@ public:
                         str_value.data() + str_value.size(),
                         point[i++]
                     );
+
+                    if(i == point.attrs.size()) {
+                        this->skip_until_char(')');
+                        this->cursor--;
+                        break;
+                    }
                 }
                 while(i != point.attrs.size()) {
                     // Quando não tiver os valores para atualizar, apenas diremos que se trata de um valor específico
                     point[i++] = 99;
                 }
+                // Para o caso de jogadores, está vindo mais valores do que podemos guardar!
 
                 this->cursor++;
             }
+        }
+
+        std::string get_region() {
+            return std::string(std::string_view(this->cursor - 20, 50));
+        }
+
+        void clean() {
+            // Retornarmos seus valores ao nulo para evitar qualquer descuido
+            this->cursor = nullptr;
+            this->end    = nullptr;
         }
 
     public:
@@ -622,81 +652,77 @@ public:
             this->cursor = message_from_server.data();
             this->end    = message_from_server.data() + message_from_server.size();
 
-            /* Processamento da Mensagem */
-            while(this->cursor < this->end) {
-
-                if(!this->skip_until_char('(')) {
-                    return;
-                }
-
-                std::string_view uppest_tag = this->get_next_str();
-                switch (uppest_tag[0]) {
-
-                    case 'i': { // init
-
-                        if(env.unum != 1){
-                            // Para que seja thread-safe, permitiremos que apenas o jogador 1 faça essas alterações.
-                            break;
-                        }
-                        Environment::is_left = this->get_next_str()[0] == 'l';
-                        // Devemos pular o número de uniforme, pois já está salvo no ServerComm
-                        this->get_next_str();
-                        // É garantido que teremos is_left definido daqui em diante
-                        std::string_view possible_mode = this->get_next_str();
-                        std::optional<Environment::PlayMode> result_from_search = Environment::get_play_mode(possible_mode);
-                        if(result_from_search.has_value()) {
-                            // std::move para não haver cópia
-                            Environment::pm = std::move(result_from_search.value());
-                        }
-                        else {
-                            env.logger.warn("Mode Unknown: {}", possible_mode);
-                        }
-
-                        break;
-                    }
-
-                    case 's': { // server_param see sense_body
-
-                        switch (uppest_tag.size()) {
-
-                            case 3: { // see
-
-                                this->parse_see(env);
-                                break;
-                            }
-
-                            case 10: { // sense_body
-
-                                this->parse_sensebody(env);
-                                break;
-                            }
-
-                            case 12: { // server_param
-                                return; // Vamos apenas pular essa mensagem
-                            }
-                        }
-
-                        break;
-                    }
-
-                    case 'p': { // player_param player_type
-                        return; // Vamos apenas pular essa mensagem
-                    }
-
-                    case 'o': { // ok
-                        return; // Vamos apenas pular essa mensagem
-                    }
-
-                    default:
-                        env.logger.warn("Uppest_Tag Unknown: {}", uppest_tag);
-                        // Como trata-se de uma tag superior desconhecida, podemos apenas jogar o restante fora
-                        return;
-                }
+            if(this->cursor == nullptr) {
+                return;
             }
 
-            // Retornarmos seus valores ao nulo para evitar qualquer descuido
-            this->cursor = nullptr;
-            this->end    = nullptr;
+            std::string_view uppest_tag = this->get_next_str();
+            switch (uppest_tag[0]) {
+
+                case 'i': { // init
+
+                    if(env.unum != 1) {
+                        // Para que seja thread-safe, permitiremos que apenas o jogador 1 faça essas alterações.
+                        break;
+                    }
+                    Environment::is_left = this->get_next_str()[0] == 'l';
+                    // Devemos pular o número de uniforme, pois já está salvo no ServerComm
+                    this->get_next_str();
+                    // É garantido que teremos is_left definido daqui em diante
+                    std::string_view possible_mode = this->get_next_str();
+                    std::optional<Environment::PlayMode> result_from_search = Environment::get_play_mode(possible_mode);
+                    if(result_from_search.has_value()) {
+                        // std::move para não haver cópia
+                        Environment::pm = std::move(result_from_search.value());
+                    }
+                    else {
+                        env.logger.warn("Mode Unknown: {}", possible_mode);
+                    }
+
+                    return this->clean();
+                }
+
+                case 's': { // server_param see sense_body
+
+                    switch (uppest_tag.size()) {
+
+                        case 3: { // see
+
+                            this->parse_see(env);
+                            return this->clean();
+                        }
+
+                        case 10: { // sense_body
+
+                            this->parse_sensebody(env);
+                            return this->clean();
+                        }
+
+                        case 12: { // server_param
+                            return this->clean(); // Vamos apenas pular essa mensagem
+                        }
+                    }
+
+                    break;
+                }
+
+                case 'p': { // player_param player_type
+                    return this->clean(); // Vamos apenas pular essa mensagem
+                }
+
+                case 'o': { // ok
+                    return this->clean(); // Vamos apenas pular essa mensagem
+                }
+
+                case 'w': { // warning
+                    return this->clean(); // Vamos apenas pular essa mensagem
+                }
+
+                default:
+                    env.logger.warn("Uppest_Tag Unknown: {} | Redondezas: {}", uppest_tag, this->get_region());
+                    // Como trata-se de uma tag superior desconhecida, podemos apenas jogar o restante fora
+                    return this->clean(); // Vamos apenas pular essa mensagem
+            }
         }
     };
     WorldParser wp;

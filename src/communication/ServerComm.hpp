@@ -24,11 +24,14 @@ private:
     sockaddr_in __serveraddr;
     // Buffer para mensagens do Server
     std::array<char, Booting::SIZEBUFFER> __buffer;
+    // Inteiro para verificarmos se houve desconexão
+    size_t __disconnect = 0;
 
 public:
 
+    // Precisamos do número do jogador a fim de posicioná-lo corretamente no início
     uint8_t unum = 0;
-    inline static uint8_t number_players = 0; // Definiremos o número do jogador aqui, sim.
+    inline static uint8_t number_players = 0;
 
     /**
      * @brief Construtor: conecta ao servidor e realiza handshake UDP.
@@ -91,7 +94,9 @@ public:
         fcntl(this->__fd, F_SETFL, O_NONBLOCK);
     }
 
-    ~ServerComm(){ send_immediate("(bye)"); close(this->__fd); }
+    void termined(){ send_immediate("(bye)"); close(this->__fd); }
+
+    bool isclosed(){ return this->__fd == 0; }
 
     /**
      * @brief Envia mensagem imediatamente
@@ -109,7 +114,7 @@ public:
 
     /**
      * @brief Verifica se há dados disponíveis para leitura no socket.
-     * @details Acontece que a função `select` escreve nos endereços fornecidos
+     * @details Acontece que a função `select` escreve nos endereços fornecidos,
      * modificando-os, por isso temos que declará-los a cada uso na função
      * @return 1 Se há dados (pronto para ler)
      * @return 0 Se timeout expirou
@@ -130,7 +135,7 @@ public:
             nullptr,
             nullptr,
             &timeout
-        ) > 0;
+        );
     }
 
     /**
@@ -139,11 +144,15 @@ public:
      * @note Verifica disponibilidade com is_readable() antes de recv().
      */
     std::string_view receive() {
-        if(this->is_readable() > 0){
+        if(this->is_readable() > 0) {
             ssize_t n = recv(this->__fd, this->__buffer.data(), this->__buffer.size(), 0);
+            this->__disconnect = 0;
             return {this->__buffer.data(), static_cast<size_t>(n)};
         }
 
+        if(this->__disconnect++ >= 1000) {
+            this->termined();
+        }
         return {};
     }
 };
