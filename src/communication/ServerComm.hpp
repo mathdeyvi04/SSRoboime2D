@@ -94,9 +94,27 @@ public:
         fcntl(this->__fd, F_SETFL, O_NONBLOCK);
     }
 
-    void termined(){ send_immediate("(bye)"); close(this->__fd); }
+    /**
+     * @brief Encerra a conexão com o servidor.
+     *
+     * Envia comando de despedida "(bye)", fecha o socket e
+     * redefine o descritor do socket para 0.
+     */
+    void termined() {
+        this->send_immediate("(bye)");
+        close(this->__fd);
+        this->__fd = 0;
+    }
 
-    bool isclosed(){ return this->__fd == 0; }
+    /**
+     * @brief Verifica se a conexão está encerrada.
+     *
+     * @return true  Se o socket está fechado (__fd == 0)
+     * @return false Se o socket ainda está aberto (__fd != 0)
+     */
+    bool isclosed() {
+        return this->__fd == 0;
+    }
 
     /**
      * @brief Envia mensagem imediatamente
@@ -150,9 +168,10 @@ public:
             return {this->__buffer.data(), static_cast<size_t>(n)};
         }
 
-        if(this->__disconnect++ >= 1000) {
+        if(this->__disconnect++ >= 20) {
             this->termined();
         }
+
         return {};
     }
 };
