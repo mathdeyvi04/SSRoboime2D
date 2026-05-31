@@ -25,6 +25,7 @@ public:
         // Direita
     };
     // ----- Atributos Gerais Comuns a Cada Jogador
+    // Apenas jogador 1 modifica essa variáveis, logo não há race conditions
     inline static bool is_left = false;
     inline static int cycle    = 0;
 
