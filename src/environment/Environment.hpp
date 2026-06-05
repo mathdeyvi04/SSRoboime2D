@@ -151,10 +151,10 @@ public:
             Environment::pack('f', 't', 'r', '5'),     // 53
             Environment::pack('g', 'l'),               // 54
             Environment::pack('g', 'r'),               // 55
-            Environment::pack('l', 'b', '0'),          // 56
-            Environment::pack('l', 'l', '0'),          // 57
-            Environment::pack('l', 'r', '0'),          // 58
-            Environment::pack('l', 't', '0'),          // 59
+            Environment::pack('l', 'b'),               // 56
+            Environment::pack('l', 'l'),               // 57
+            Environment::pack('l', 'r'),               // 58
+            Environment::pack('l', 't'),               // 59
         };
 
         // Caso seja para obtermos o index correspondente a um jogador
@@ -707,6 +707,12 @@ public:
                     break;
                 }
 
+                case 'h': { // hear
+                    // Por enquanto, vamos apenas ignorar esse tipo de mensagem.
+                    // Mas é fato que é importante e merece atenção futura.
+                    return this->clean();
+                }
+
                 case 'p': { // player_param player_type
                     return this->clean(); // Vamos apenas pular essa mensagem
                 }
@@ -716,6 +722,10 @@ public:
                 }
 
                 case 'w': { // warning
+                    return this->clean(); // Vamos apenas pular essa mensagem
+                }
+
+                case 'c': { // change_player_type
                     return this->clean(); // Vamos apenas pular essa mensagem
                 }
 
