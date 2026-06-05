@@ -17,12 +17,14 @@ public:
     Logger& logger = Logger::get();
     enum class PlayMode : uint8_t {
         // Neutros
-        BEFORE_KICK_OFF = 0b0000'0000,
-        PLAY_ON         = 0b0000'0001,
+        BEFORE_KICK_OFF,
+        PLAY_ON,
 
-        // Esquerda
+        // Nossos
+        OUR_KICK_OFF,
 
-        // Direita
+        // Deles
+        OPP_KICK_OFF,
     };
     // ----- Atributos Gerais Comuns a Cada Jogador
     // Apenas jogador 1 modifica essa variáveis, logo não há race conditions
@@ -31,10 +33,13 @@ public:
 
     inline static std::optional<Environment::PlayMode> get_play_mode(const std::string_view& key) {
         static constexpr std::array <
-            std::pair<std::string_view, std::array<Environment::PlayMode, 2>>, 2
+            std::pair<std::string_view, std::array<Environment::PlayMode, 2>>, 4
         > dict_play_modes = {{
             {"before_kick_off", {PlayMode::BEFORE_KICK_OFF, PlayMode::BEFORE_KICK_OFF}},
-            {"play_on", {PlayMode::PLAY_ON, PlayMode::PLAY_ON}}
+            {"play_on", {PlayMode::PLAY_ON, PlayMode::PLAY_ON}},
+            {"kick_off_l", {PlayMode::OUR_KICK_OFF, PlayMode::OPP_KICK_OFF}},
+            {"kick_off_r", {PlayMode::OPP_KICK_OFF, PlayMode::OPP_KICK_OFF}}
+
         }};
 
         for(const auto& elemento : dict_play_modes) {
@@ -55,7 +60,8 @@ public:
     std::array<uint8_t, 2> view_mode;
 
     /** @brief Gestão de energia. [0]: Stamina, [1]: Effort, [2]: Capacity. */
-    std::array<size_t, 3> stamina_info;
+    std::array<float, 3> stamina_info;
+    inline static size_t stamina_max = 8000; // Assumiremos que será esse valor para todos.
 
     /** @brief Vetor velocidade relativo ao campo. [0]: vx, [1]: vy. */
     std::array<int, 2> speed = {0, 0};
@@ -93,7 +99,6 @@ public:
      * @return 255 caso a sequência não exista na tabela.
      */
     inline static uint8_t tokenstoid(const char& token1, const char& token2 = 0, const char& token3 = 0, const char& token4 = 0) {
-        // NÃO PROVEMOS INFORMAÇÕES DE LINHAAAAAAAAAAS
         static constexpr std::array<uint32_t, 60> flagtable = {
             Environment::pack('b'),                    // 0
             Environment::pack('f', 'b', '0'),          // 1
@@ -630,14 +635,55 @@ public:
             }
         }
 
-        std::string get_region() {
-            return std::string(std::string_view(this->cursor - 20, 50));
+        void parse_hear(Environment& env) {
+            // Então sabemos que virá informações de ciclos
+            this->get_next_str();
+
+            // Teremos o sender
+            std::string_view sender = this->get_next_str();
+
+            // Com o sender, virá as possibilidades
+            switch(sender[0]) {
+
+                case 'r': {
+                    // Então referee mandou o modo
+                    std::string_view possible_mode = this->get_next_str();
+                    std::optional<Environment::PlayMode> result_from_search = Environment::get_play_mode(possible_mode);
+                    if(result_from_search.has_value()) {
+                        // std::move para não haver cópia
+                        Environment::pm = std::move(result_from_search.value());
+                    }
+                    else {
+                        env.logger.warn("Mode Unknown: {}", possible_mode);
+                    }
+
+                    return;
+                }
+
+                default: {
+                    this->skip_unknown();
+                }
+            }
         }
 
+
+        /**
+         * @brief Reinicia os ponteiros da região atual.
+         * @details Atribui `nullptr` a ambos os ponteiros (início e fim)
+         *          para evitar acesso indevido a memória.
+         */
         void clean() {
-            // Retornarmos seus valores ao nulo para evitar qualquer descuido
             this->cursor = nullptr;
             this->end    = nullptr;
+        }
+
+        /**
+         * @brief Extrai uma string da região de memória.
+         * @return std::string 50 caracteres, começando 20 posições antes do cursor.
+         * @warning Assume que `cursor - 20` é um endereço válido, mas pode não ser
+         */
+        std::string get_region() {
+            return std::string(std::string_view(this->cursor - 10, 50));
         }
 
     public:
@@ -710,6 +756,7 @@ public:
                 case 'h': { // hear
                     // Por enquanto, vamos apenas ignorar esse tipo de mensagem.
                     // Mas é fato que é importante e merece atenção futura.
+                    this->parse_hear(env);
                     return this->clean();
                 }
 

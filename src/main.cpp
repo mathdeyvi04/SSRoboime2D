@@ -8,7 +8,7 @@
 
 int main(int argc, char** argv){
 
-    constexpr int quant = 11;
+    constexpr int quant = 1;
     std::array<BasicAgent, quant> team;
 
 #ifdef MULTITHREAD
