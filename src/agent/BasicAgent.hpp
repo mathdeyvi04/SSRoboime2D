@@ -25,7 +25,7 @@ private:
 
 public:
     // Counter Necessário para não explodirmos o servidor de comandos
-    std::array<uint8_t, 1> counter;
+    std::array<uint8_t, 2> counter={0,8};
 
     bool ball_is_visible = false;
 
@@ -158,7 +158,14 @@ public:
 
         return 1;
     }
-
+    /**
+     * @brief Executa um ciclo completo de Percepção, Atualização e Ação do agente.
+     * * Este método atua como o motor do robô. Ele escuta o servidor do simulador,
+     * atualiza a percepção de mundo do robô com base nas mensagens recebidas e 
+     * toma a decisão de buscar a bola.
+     * * @return int Retorna 0 se o ciclo foi executado com sucesso; 
+     * Retorna 1 se a conexão com o servidor foi encerrada.
+     */
     int run() {
         if(this->__sc.isclosed()) {
             return 1;
@@ -168,12 +175,49 @@ public:
 
         // Interpretamos a mensagem
         this->__env.wp.update_from_server(message_from_server, this->__env);
-
-        // Tomamos alguma decisão
-        this->seek_the_ball();
+        //
+        this->dash();
+        
+        this->turn(15, 0);
 
         return 0;
     }
 
+
+    /**
+     * @brief Altera a orientação angular do corpo e da cabeça do robô.
+     * * Envia comandos síncronos/imediatos para o servidor do simulador. 
+     * O comando do corpo é sempre enviado, enquanto o da cabeça depende do valor ser diferente de zero.
+     * * @note Valores de ângulos são em graus.
+     * @warning Certifique-se de corrigir a string "turn_neck {}" para "(turn_neck {})" 
+     * para evitar rejeição pelo protocolo do servidor.
+     * * @param angle_body Ângulo desejado para rotação do corpo.
+     * @param angle_head Ângulo desejado para rotação do pescoço (relativo ao corpo). Padrão é 0.
+     */
+    int turn(int angle_body, int angle_head = 0){
+        if(this->counter[1]++ !=10){
+            return 0;
+        }
+
+        // Envio imperativo do comando de rotação do corpo
+        this->__sc.send_immediate(
+            std::format(
+                "(turn {})",
+                angle_body
+            )
+        );
+        // Envio condicional do comando de rotação da cabeça
+        if (angle_head != 0) {
+            this->__sc.send_immediate(
+                std::format(
+                    "turn_neck {}", // Corrigido para o padrão do protocolo (com parêntese)
+                    angle_head
+                )
+            );
+
+        }
+        counter[1] = 0;
+        return 1;
+}
 
 };
