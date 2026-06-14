@@ -35,11 +35,11 @@ public:
 
     // Precisamos do número do jogador a fim de posicioná-lo corretamente no início
     uint8_t unum = 0;
-    #ifdef MULTITHREAD
+#ifdef MULTITHREAD
     inline static std::atomic<uint8_t> number_players = 0;
-    #else
+#else
     inline static uint8_t number_players = 0;
-    #endif
+#endif
 
     /**
      * @brief Construtor: conecta ao servidor e realiza handshake UDP.

@@ -577,7 +577,7 @@ public:
 
                 // Não somente os jogadores, mas há a possibilidades de flags virem
                 // sem identificação
-                if(number_tokens < 2 || (number_tokens < 3 && tokens[0] == 'p')) {
+                if((number_tokens < 2 && tokens[0] != 'b') || (number_tokens < 3 && tokens[0] == 'p')) {
                     if(tokens[0] == 'p') {
                         this->cursor++;
                     }
@@ -665,7 +665,6 @@ public:
                 }
             }
         }
-
 
         /**
          * @brief Reinicia os ponteiros da região atual.

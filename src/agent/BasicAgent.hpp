@@ -6,9 +6,6 @@
 #include <cstdlib>
 #include <ctime>
 
-#include <iostream>
-#include <ranges>
-
 #include "../communication/ServerComm.hpp"
 #include "../environment/Environment.hpp"
 #include "../booting/TacticalFormations.hpp"
@@ -16,7 +13,6 @@
 
 class BasicAgent {
 private:
-
     // Portal de Comunicações entre jogador e servidor
     ServerComm __sc;
 
@@ -27,7 +23,20 @@ public:
     // Counter Necessário para não explodirmos o servidor de comandos
     std::array<uint8_t, 2> counter={0,8};
 
+    // Flag de verificação de visibilidade da bola
     bool ball_is_visible = false;
+
+#ifdef AGENT_INFO
+    inline static std::array<
+        float,
+        /*
+        - ball_is_visible
+        - counter[0]
+        - counter[1]
+        */
+        11 * 3
+    > each_agent_info;
+#endif
 
     BasicAgent() {
         // Inicializamos todas os pontos principais
@@ -98,7 +107,7 @@ public:
      */
     int dash() {
 
-        if(Environment::pm == Environment::PlayMode::BEFORE_KICK_OFF){
+        if(Environment::pm == Environment::PlayMode::BEFORE_KICK_OFF) {
             return 0;
         }
 
@@ -129,11 +138,6 @@ public:
         );
         this->counter[0] = 0;
 
-//        // Apenas para verificação dos parâmetros:
-//        std::cout << "stamina_info: ";
-//        std::ranges::copy(this->__env.stamina_info, std::ostream_iterator<int>(std::cout, " "));
-//        std::cout << std::endl;
-
         return 1;
     }
 
@@ -141,29 +145,29 @@ public:
         // Moveremos o pescoço para mantermos a cabeça olhando para a bola, sempre.
 
         // Atualizaremos o estado da bola
+        this->ball_is_visible = false;
         for(uint8_t i = 0; i < this->__env.number_visibles; ++i){
             if(this->__env.visibles_index[i] == 0) {
                 this->ball_is_visible = true;
                 break;
             }
         }
-        this->ball_is_visible = false;
 
         if(this->ball_is_visible) {
             // Então vamos olhar para ela
             // Neste caso em específico, sabemos que ela está em (0, 0)
-            std::cout << "Vejo a bola" << std::endl;
             // Precisamos da nossa ângulo em graus para virar a cabeça!
         }
 
         return 1;
     }
+
     /**
      * @brief Executa um ciclo completo de Percepção, Atualização e Ação do agente.
-     * * Este método atua como o motor do robô. Ele escuta o servidor do simulador,
-     * atualiza a percepção de mundo do robô com base nas mensagens recebidas e 
+     * * Este métodx atua como o motor do robô. Ele escuta o servidor do simulador,
+     * atualiza a percepção de mundo do robô com base nas mensagens recebidas e
      * toma a decisão de buscar a bola.
-     * * @return int Retorna 0 se o ciclo foi executado com sucesso; 
+     * * @return int Retorna 0 se o ciclo foi executado com sucesso;
      * Retorna 1 se a conexão com o servidor foi encerrada.
      */
     int run() {
@@ -175,48 +179,56 @@ public:
 
         // Interpretamos a mensagem
         this->__env.wp.update_from_server(message_from_server, this->__env);
-        //
-        this->dash();
-        
-        this->turn(15, 0);
+
+        // Tomamos uma decisão
+        this->seek_the_ball();
+
+#ifdef AGENT_INFO
+        // Populamos o vetor de informações
+
+        BasicAgent::each_agent_info[3 * (__env.unum - 1)] = this->ball_is_visible;
+        BasicAgent::each_agent_info[3 * (__env.unum - 1) + 1] = this->counter[0];
+        BasicAgent::each_agent_info[3 * (__env.unum - 1) + 2] = this->counter[1];
+
+#endif // AGENT_INFO
 
         return 0;
     }
 
-
     /**
      * @brief Altera a orientação angular do corpo e da cabeça do robô.
-     * * Envia comandos síncronos/imediatos para o servidor do simulador. 
+     * * Envia comandos síncronos/imediatos para o servidor do simulador.
      * O comando do corpo é sempre enviado, enquanto o da cabeça depende do valor ser diferente de zero.
-     * * @note Valores de ângulos são em graus.
-     * @warning Certifique-se de corrigir a string "turn_neck {}" para "(turn_neck {})" 
-     * para evitar rejeição pelo protocolo do servidor.
-     * * @param angle_body Ângulo desejado para rotação do corpo.
+     * @note Valores de ângulos são em graus para evitar rejeição pelo protocolo do servidor.
+     * @param angle_body Ângulo desejado para rotação do corpo.
      * @param angle_head Ângulo desejado para rotação do pescoço (relativo ao corpo). Padrão é 0.
      */
-    int turn(int angle_body, int angle_head = 0){
-        if(this->counter[1]++ !=10){
+    int turn(int angle_body = 0, int angle_head = 0) {
+
+        if(this->counter[1]++ != 10) {
             return 0;
         }
 
         // Envio imperativo do comando de rotação do corpo
-        this->__sc.send_immediate(
-            std::format(
-                "(turn {})",
-                angle_body
-            )
-        );
-        // Envio condicional do comando de rotação da cabeça
-        if (angle_head != 0) {
+        if(angle_body != 0) {
             this->__sc.send_immediate(
                 std::format(
-                    "turn_neck {}", // Corrigido para o padrão do protocolo (com parêntese)
+                    "(turn {})",
+                    angle_body
+                )
+            );
+        }
+        // Envio condicional do comando de rotação da cabeça
+        if(angle_head != 0) {
+            this->__sc.send_immediate(
+                std::format(
+                    "(turn_neck {})", // Corrigido para o padrão do protocolo (com parêntese)
                     angle_head
                 )
             );
-
         }
-        counter[1] = 0;
+        this->counter[1] = 0;
+
         return 1;
 }
 
