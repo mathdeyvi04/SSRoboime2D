@@ -54,6 +54,7 @@ int main(int argc, char** argv){
             idx_for_attr < static_cast<uint8_t>(BasicAgent::each_agent_info.size() / 11);
             ++idx_for_attr
         ) {
+            // Pode ser pensado adicionarmos nomes à cada atributo
             projetor[idx_for_attr + 1] << std::setw(WIDTH) << "      ";
             for(uint8_t j = 0; j < amount; ++j) {
                 // Atributo x está na linha x + 1, logo:

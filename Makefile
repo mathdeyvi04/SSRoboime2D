@@ -18,11 +18,5 @@ debug:
 	./src/main.cpp -o ./src/debug;
 	@gdb ./src/debug;
 
-debug_multithread:
-	@$(CXX_DEBUG) \
-	-pthread -DMULTITHREAD \
-	./src/main.cpp -o ./src/debug;
-	@gdb ./src/debug;
-
 clean:
 	@rm -rf src/debug src/main logs
