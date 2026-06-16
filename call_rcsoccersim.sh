@@ -13,12 +13,12 @@ SERVER_ARGS=(
 
 if [[ "$1" == "--trainer_w_referee" ]]; then
     echo "Iniciando servidor com suporte a Trainer e Árbitro..."
-    SERVER_ARGS+=("-coach_w_referee")
+    SERVER_ARGS+=("server::coach_w_referee=true")
 fi
 
 if [[ "$1" == "--trainer" ]]; then
     echo "Iniciando servidor com suporte a Trainer..."
-    SERVER_ARGS+=("-coach")
+    SERVER_ARGS+=("server::coach=true")
 fi
 
 echo "Iniciando rcssserver..."
