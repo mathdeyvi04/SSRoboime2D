@@ -12,7 +12,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <fcntl.h>
+#include <cerrno>
 
 #ifdef MULTITHREAD
 #include <atomic>
@@ -35,6 +35,7 @@ public:
 
     // Precisamos do número do jogador a fim de posicioná-lo corretamente no início
     uint8_t unum = 0;
+
 #ifdef MULTITHREAD
     inline static std::atomic<uint8_t> number_players = 0;
 #else
@@ -49,7 +50,6 @@ public:
      *          2. Recebe resposta, capturando a porta real do servidor (from.sin_port)
      *          3. Reconfigura destino para a nova porta
      *          4. Aplica connect() para envio/recebimento simplificado
-     *          5. Configura socket como não-bloqueante
      */
     ServerComm() {
         this->unum = ++ServerComm::number_players;
@@ -98,8 +98,17 @@ public:
             reinterpret_cast<sockaddr*>(&this->__serveraddr),
             sizeof(this->__serveraddr)
         );
-        // Definimos como não bloqueante
-        fcntl(this->__fd, F_SETFL, O_NONBLOCK);
+        // Define timeout para operações de recebimento (bloqueia até timeout)
+        struct timeval tv;
+        tv.tv_sec  = 1; // -- Deixaremos esperando por 1 segundo no máximo
+        tv.tv_usec = 0;
+        setsockopt(
+            this->__fd,
+            SOL_SOCKET,
+            SO_RCVTIMEO,
+            &tv,
+            sizeof(tv)
+        );
     }
 
     /**
@@ -139,47 +148,48 @@ public:
     }
 
     /**
-     * @brief Verifica se há dados disponíveis para leitura no socket.
-     * @details Acontece que a função `select` escreve nos endereços fornecidos,
-     * modificando-os, por isso temos que declará-los a cada uso na função
-     * @return 1 Se há dados (pronto para ler)
-     * @return 0 Se timeout expirou
-     * @return -1 Se erro no select
-     */
-    int is_readable() {
-        fd_set read_fds;
-        FD_ZERO(&read_fds);
-        FD_SET(this->__fd, &read_fds);
-        struct timeval timeout = {
-            .tv_sec = 0,
-            .tv_usec = Booting::TIMEOUTSOCKETSERVER * 1000
-        };
-
-        return select(
-            this->__fd + 1,
-            &read_fds,
-            nullptr,
-            nullptr,
-            &timeout
-        );
-    }
-
-    /**
-     * @brief Tenta receber dados do socket (não-bloqueante).
+     * @brief Tenta receber dados do socket.
      * @return std::string_view Dados recebidos (vazio se timeout/erro).
-     * @note Verifica disponibilidade com is_readable() antes de recv().
      */
     std::string_view receive() {
-        if(this->is_readable() > 0) {
-            ssize_t n = recv(this->__fd, this->__buffer.data(), this->__buffer.size(), 0);
+        // Proteção contra uso após fechamento
+        if(this->isclosed()) {
+            return {};
+        }
+
+        // Aguarda dados bloqueantemente
+        ssize_t n = recv(
+            this->__fd,
+            this->__buffer.data(),
+            this->__buffer.size(),
+            0
+        );
+
+        if(n > 0) {
+            // Dados recebidos com sucesso: reseta contador de desconexão
             this->__disconnect = 0;
             return {this->__buffer.data(), static_cast<size_t>(n)};
         }
-
-        if(this->__disconnect++ >= 20) {
-            this->termined();
+        else if(n == -1) {
+            // Verifica se foi timeout (servidor não respondeu dentro do prazo)
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                // Timeout: incrementa contador de falhas consecutivas
+                if (++this->__disconnect >= 3) {
+                    // Após timeouts consecutivos, considera servidor morto
+                    this->termined();
+                }
+                return {};
+            }
+            else {
+                // Outro erro (conexão resetada, socket inválido)
+                this->termined();
+                return {};
+            }
         }
-
-        return {};
+        else {
+            // n == 0 (servidor fechou conexão, raro em UDP, mas por segurança)
+            this->termined();
+            return {};
+        }
     }
 };

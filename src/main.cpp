@@ -15,11 +15,10 @@
 
 int main(int argc, char** argv){
 
-    constexpr uint8_t amount = 3;
+    constexpr uint8_t amount = 1;
     std::array<BasicAgent, amount> team;
 
 #ifdef MULTITHREAD
-
     std::atomic<uint8_t> amount_alive = 0;
     std::vector<std::thread> threads;
     for(uint8_t i = 1; i <= amount; ++i) {
@@ -38,9 +37,12 @@ int main(int argc, char** argv){
 #ifdef AGENT_INFO
     // Apresentação da tela
     std::cout << "\033[2J";
-    constexpr uint8_t WIDTH = 12;
+    constexpr uint8_t WIDTH = 15;
 
-    std::array<std::ostringstream, BasicAgent::each_agent_info.size() / 11 + 1> projetor;
+    std::array<std::ostringstream, BasicAgent::total_attrs + 1> projetor;
+    std::array<std::string, BasicAgent::total_attrs> attr_names = {
+        "ball_is_visible"
+    };
     while(amount_alive != 0) {
 
         // Title Line
@@ -51,27 +53,26 @@ int main(int argc, char** argv){
 
         for(
             uint8_t idx_for_attr = 0;
-            idx_for_attr < static_cast<uint8_t>(BasicAgent::each_agent_info.size() / 11);
+            idx_for_attr < BasicAgent::total_attrs;
             ++idx_for_attr
         ) {
             // Pode ser pensado adicionarmos nomes à cada atributo
-            projetor[idx_for_attr + 1] << std::setw(WIDTH) << "      ";
+            projetor[idx_for_attr + 1] << std::setw(WIDTH) << attr_names[idx_for_attr];
             for(uint8_t j = 0; j < amount; ++j) {
                 // Atributo x está na linha x + 1, logo:
-                projetor[idx_for_attr + 1] << std::setw(WIDTH) << BasicAgent::each_agent_info[j * 3 + idx_for_attr];
+                projetor[idx_for_attr + 1] << std::setw(WIDTH) << BasicAgent::each_agent_info[j * BasicAgent::total_attrs + idx_for_attr];
             }
         }
 
         // Apresentation
         std::cout << "\033[H";
-        for(uint8_t i = 0; i < (amount + 1); ++i) {
+        for(uint8_t i = 0; i < projetor.size(); ++i) {
             std::cout << projetor[i].str() << "\n";
             projetor[i].str("");
+            projetor[i].clear();
         }
-        std::cout << std::endl;;
     }
 #endif // AGENT_INFO
-
     // Espera todas as threads terminarem
     for(auto& t : threads) {
         t.join();
