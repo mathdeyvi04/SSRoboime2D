@@ -352,6 +352,8 @@ public:
     std::queue<AgentAction> command_queue {};
     /* Buffer Reutilizável para Serialização dos Comandos */
     std::array<char, 64> command_buffer {};
+    /* Os seguintes comandos não podem ser acionados ao mesmo tempo: Dash, Turn, Kick */
+    bool body_command_flag {false};
 
     /**
      * @brief Envia todos os comandos enfileirados para o servidor.
@@ -384,7 +386,6 @@ public:
                 buffer.data(),
                 bytes_escritos
             );
-
             command_queue.pop();
         }
     }
@@ -414,7 +415,7 @@ public:
      *
      * @note Executa 3 comandos: move (teletransporte), turn (corpo), turn_neck (cabeça)
      */
-    void beam(double posx, double posy, int angle_body = 0, int angle_head = 0){
+    void beam(double posx, double posy, int angle_body = 0, int angle_head = 0) {
         // Teletransportamos o corpo
         this->__sc.send_immediate(
             std::format(
@@ -455,9 +456,17 @@ public:
      *   - >3000 -> 60%
      *   - ≤3000 -> 20%
      */
-    int dash(uint8_t power) {
+    int dash(double power) {
 
         if(Environment::pm == Environment::PlayMode::BEFORE_KICK_OFF) {
+            return 0;
+        }
+
+        if(Environment::cycle < 150) {
+            return 0;
+        }
+
+        if(this->body_command_flag) {
             return 0;
         }
 
@@ -473,23 +482,73 @@ public:
         À primeira vista, lidaremos apenas com stamina_info.
         */
 
-        if(this->__env.stamina_info[0] <= 3000) {
-            power = std::min(power, static_cast<uint8_t>(20));
+        if (this->__env.stamina_info[0] <= 3000) {
+            power = std::min(power, 20.0);
         }
-        else if(this->__env.stamina_info[0] <= 6000) {
-            power = std::min(power, static_cast<uint8_t>(60));
+        else if (this->__env.stamina_info[0] <= 6000) {
+            power = std::min(power, 60.0);
         }
         else {
-            power = std::min(power, static_cast<uint8_t>(100));
+            power = std::min(power, 100.0);
         }
-//        this->__sc.send(
-//            std::format(
-//                "(dash {})",
-//                power
-//            )
-//        );
+        this->command_queue.push(Dash{power});
+        this->body_command_flag = true;
 
         return 1;
+    }
+
+    /**
+     * @brief Executa rotação do corpo e opcionalmente do pescoço.
+     *
+     * @param angle_body Ângulo de rotação do corpo em graus (positivo = anti-horário).
+     * @param angle_head Ângulo de rotação do pescoço em graus (padrão = 0).
+     *
+     * @return int 1 se o comando foi enfileirado com sucesso, 0 se o corpo já possui comando pendente.
+     *
+     * @note Apenas um comando corporal pode ser enfileirado por ciclo.
+     * @note Se angle_head não for fornecido, nenhum comando de pescoço é enfileirado.
+     */
+    int turn(
+        double angle_body,
+        double angle_head = 0
+    ) {
+        if(this->body_command_flag) {
+            return 0;
+        }
+
+        this->command_queue.push(Turn{angle_body});
+
+        if (!angle_head) {
+            this->command_queue.push(TurnNeck{angle_head});
+        }
+
+        this->body_command_flag = true;
+        return 1;
+    }
+
+    /**
+     * @brief Executa um chute na bola com potência e direção especificadas.
+     *
+     * @param power Potência do chute (0-100).
+     * @param direction Direção do chute em graus relativa à orientação atual do corpo.
+     *
+     * @return int 1 se o comando foi enfileirado com sucesso, 0 se o corpo já possui comando pendente.
+     *
+     * @note Apenas um comando corporal pode ser enfileirado por ciclo.
+     * @note A direção é relativa ao corpo do agente, não absoluta no campo.
+     */
+    int kick(
+        double power,
+        double direction
+    ) {
+        if(this->body_command_flag) {
+            return 0;
+        }
+
+        this->command_queue.push(Kick{power, direction});
+        this->body_command_flag = true;
+
+        return 1;  // Retorno adicionado para consistência
     }
 
     /**
@@ -545,10 +604,14 @@ public:
         // Interpretamos a mensagem
         this->__env.wp.update_from_server(message_from_server, this->__env);
 
+        // Antes de tomarmos as decisões, devemos resetar algumas coisas
+        this->body_command_flag = false;
+
         // Tomamos decisões
+        this->dash(100);
 
         // Enviamos os comandos
-
+        this->send_commands();
 
 #ifdef AGENT_INFO
         // Populamos o vetor de informações

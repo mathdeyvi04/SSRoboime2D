@@ -100,8 +100,8 @@ public:
         );
         // Define timeout para operações de recebimento (bloqueia até timeout)
         struct timeval tv;
-        tv.tv_sec  = 1; // -- Deixaremos esperando por 1 segundo no máximo
-        tv.tv_usec = 0;
+        tv.tv_sec  = 0;
+        tv.tv_usec = 200000;
         setsockopt(
             this->__fd,
             SOL_SOCKET,
@@ -134,15 +134,37 @@ public:
     }
 
     /**
-     * @brief Envia mensagem imediatamente
+     * @brief Envia mensagem imediatamente a partir de uma string.
+     *
      * @param msg Mensagem a ser enviada.
-     * @return Se enviou alguma quantidade de bytes
+     * @return true Se pelo menos um byte foi enviado.
+     * @return false Se nenhum byte foi enviado (erro ou conexão fechada).
      */
     bool send_immediate(const std::string& msg) {
         return send(
             this->__fd,
             msg.data(),
             msg.size(),
+            0
+        ) > 0;
+    }
+
+    /**
+     * @brief Envia dados binários ou texto diretamente do buffer.
+     *
+     * @param data Ponteiro para os dados a serem enviados (geralmente buffer.data()).
+     * @param size Número de bytes a serem transmitidos.
+     * @return true Se pelo menos um byte foi enviado.
+     * @return false Se nenhum byte foi enviado (erro ou conexão fechada).
+     */
+    bool send_immediate(
+        const char* data,
+        size_t size
+    ) {
+        return send(
+            this->__fd,
+            data,
+            size,
             0
         ) > 0;
     }
@@ -158,7 +180,7 @@ public:
         }
 
         // Aguarda dados bloqueantemente
-        ssize_t n = recv(
+        int n = recv(
             this->__fd,
             this->__buffer.data(),
             this->__buffer.size(),

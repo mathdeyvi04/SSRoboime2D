@@ -6,19 +6,19 @@ LOG_DIR="./logs"
 mkdir -p "$LOG_DIR"
 
 SERVER_ARGS=(
-    "server::game_logging=true"
-    "server::text_log_dir=$LOG_DIR"
-    "server::game_log_dir=$LOG_DIR"
+	"server::game_logging=true"
+	"server::text_log_dir=$LOG_DIR"
+	"server::game_log_dir=$LOG_DIR"
 )
 
 if [[ "$1" == "--trainer_w_referee" ]]; then
-    echo "Iniciando servidor com suporte a Trainer e Árbitro..."
-    SERVER_ARGS+=("server::coach_w_referee=true")
+	echo "Iniciando servidor com suporte a Trainer e Árbitro..."
+	SERVER_ARGS+=("server::coach_w_referee=true")
 fi
 
 if [[ "$1" == "--trainer" ]]; then
-    echo "Iniciando servidor com suporte a Trainer..."
-    SERVER_ARGS+=("server::coach=true")
+	echo "Iniciando servidor com suporte a Trainer..."
+	SERVER_ARGS+=("server::coach=true")
 fi
 
 echo "Iniciando rcssserver..."
