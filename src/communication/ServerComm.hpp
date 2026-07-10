@@ -170,12 +170,16 @@ public:
     }
 
     /**
-     * @brief Tenta receber dados do socket.
-     * @return std::string_view Dados recebidos (vazio se timeout/erro).
+     * @brief Recebe dados do servidor via socket UDP.
+     * @param non_blocking Se true, retorna imediatamente se não houver dados disponíveis.
+     * @return std::string_view Dados recebidos (vazio se timeout, erro ou sem dados).
+     * @note Após 3 timeouts consecutivos em modo bloqueante, a conexão é encerrada.
      */
-    std::string_view receive() {
+    std::string_view receive(
+        bool non_blocking = false
+    ) {
         // Proteção contra uso após fechamento
-        if(this->isclosed()) {
+        if (this->isclosed()) {
             return {};
         }
 
@@ -184,21 +188,23 @@ public:
             this->__fd,
             this->__buffer.data(),
             this->__buffer.size(),
-            0
+            // Se non_blocking for true, usamos MSG_DONTWAIT para não travar caso o buffer esteja vazio
+            non_blocking ? MSG_DONTWAIT : 0
         );
 
-        if(n > 0) {
+        if (n > 0) {
             // Dados recebidos com sucesso: reseta contador de desconexão
             this->__disconnect = 0;
             return {this->__buffer.data(), static_cast<size_t>(n)};
         }
-        else if(n == -1) {
-            // Verifica se foi timeout (servidor não respondeu dentro do prazo)
+        else if (n == -1) {
+            // Se for MSG_DONTWAIT e não tiver mais dados, errno será EAGAIN/EWOULDBLOCK
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                // Timeout: incrementa contador de falhas consecutivas
-                if (++this->__disconnect >= 3) {
-                    // Após timeouts consecutivos, considera servidor morto
-                    this->termined();
+                if (!non_blocking) {
+                    // Só conta como falha/timeout real se era para ter bloqueado
+                    if (++this->__disconnect >= 3) {
+                        this->termined();
+                    }
                 }
                 return {};
             }

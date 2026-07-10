@@ -28,8 +28,8 @@ public:
     };
     // ----- Atributos Gerais Comuns a Cada Jogador
     // Apenas jogador 1 modifica essa variáveis, logo não há race conditions
-    inline static bool is_left = false;
-    inline static int cycle    = 0;
+    inline static bool is_left {false};
+    inline static int cycle    {0};
 
     inline static std::optional<Environment::PlayMode> get_play_mode(const std::string_view& key) {
         static constexpr std::array <
@@ -50,33 +50,33 @@ public:
 
         return std::nullopt;
     }
-    inline static PlayMode pm;
+    inline static PlayMode pm {};
 
     // ----- Atributos Únicos a Cada Jogador
     /** @brief ID do jogador atribuído pelo servidor. */
-    uint8_t unum = 0;
+    uint8_t unum {};
 
     /** @brief Configuração de visão. [0]: Qualidade (High/Low), [1]: Largura (Narrow/Normal/Wide). */
-    std::array<uint8_t, 2> view_mode;
+    std::array<uint8_t, 2> view_mode {};
 
     /** @brief Gestão de energia. [0]: Stamina, [1]: Effort, [2]: Capacity. */
-    std::array<float, 3> stamina_info;
-    inline static size_t stamina_max = 8000; // Assumiremos que será esse valor para todos.
+    std::array<float, 3> stamina_info {};
+    inline static size_t stamina_max {8000}; // Assumiremos que será esse valor para todos.
 
     /** @brief Vetor velocidade relativo ao campo. [0]: vx, [1]: vy. */
     std::array<int, 2> speed = {0, 0};
 
     /** @brief Ângulo do pescoço relativo ao torso. Persiste após comando 'turn'. */
-    int head_angle = 0;
+    int head_angle {};
 
     /** @brief Point-to. [0]: Movable, [1]: Expires, [2,3]: Target(X,Y). */
-    std::array<int, 4> arm;
+    std::array<int, 4> arm {};
 
     /** @brief Foco sensorial, habilidade do jogador. [0]: Tipo, [1,2]: Meta(ID/XY), [3,4]: Pos(XY). */
-    std::array<int, 5> focus;
+    std::array<int, 5> focus {};
 
     /** @brief Status de faltas. [0]: Ativo, [1]: Cartão tomado. */
-    std::array<uint8_t, 2> fouls;
+    std::array<uint8_t, 2> fouls {};
 
     /**
      * @brief Empacota até 4 caracteres em um único inteiro de 32 bits.
@@ -193,15 +193,15 @@ public:
         /* Acredito que seja bom deixarmos em struct para posterior adição de funcionalidades */
     };
     /** @brief Array que armazenará todas os pontos possíveis e seus respectivos dados */
-    std::array<Point, 60 + 11 * 2> points_on_the_field = {
+    std::array<Point, 60 + 11 * 2> points_on_the_field {
         /* Bola */
         /* Landmarks */
         /* Players */
     };
     /** @brief Array que  armazenará o index de todos os pontos vísiveis no momento */
-    std::array<uint8_t, 60 + 11 * 2> visibles_index;
+    std::array<uint8_t, 60 + 11 * 2> visibles_index {};
     /** @brief Variável que nos possibilitará não apagar e repopular array sempre */
-    uint8_t number_visibles = 0;
+    uint8_t number_visibles {};
 
     /**
      * @brief Agrupa todas as funcionalidades de interpretação das mensagens do servidor.
@@ -210,9 +210,9 @@ public:
     private:
 
         /** @brief Atributo que marca o ponto da mensagem que está sendo lido */
-        const char* cursor = nullptr;
+        const char* cursor = {nullptr};
         /** @brief Marcador do final da mensagem */
-        const char* end    = nullptr;
+        const char* end    = {nullptr};
 
         /**
          * @brief Avança o cursor até encontrar o caractere especificado.
@@ -531,7 +531,7 @@ public:
             this->get_next_str();
             // Reiniciamos as variáveis necessárias
             env.number_visibles = 0;
-            std::array<char, 4> tokens;
+            std::array<char, 4> tokens {};
             uint8_t number_tokens = 0;
             while(*this->cursor != ')' && (this->cursor + 2) < this->end) {
 

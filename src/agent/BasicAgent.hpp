@@ -32,7 +32,7 @@ public:
 
 #ifdef AGENT_INFO
 
-    inline static total_attrs {1};
+    inline static constexpr uint8_t total_attrs {1};
     inline static std::array<
         float,
         /*
@@ -44,7 +44,7 @@ public:
 
     // -- Proveremos as ações possíveis
     struct Dash {
-        double power;  // potência do dash (positiva para frente, negativa para trás)
+        double power {};  // potência do dash (positiva para frente, negativa para trás)
 
         [[nodiscard]]
         size_t serialize(std::array<char, 64>& buffer) const {
@@ -73,7 +73,7 @@ public:
         }
     };
     struct Turn {
-        double angle_body;  // ângulo de rotação (em graus, positivo para anti-horário)
+        double angle_body {};  // ângulo de rotação (em graus, positivo para anti-horário)
 
         [[nodiscard]]
         size_t serialize(std::array<char, 64>& buffer) const {
@@ -99,7 +99,7 @@ public:
         }
     };
     struct TurnNeck {
-        double angle_head;  // ângulo de rotação do pescoço (visão)
+        double angle_head {};  // ângulo de rotação do pescoço (visão)
 
         [[nodiscard]]
         size_t serialize(std::array<char, 64>& buffer) const {
@@ -125,8 +125,8 @@ public:
         }
     };
     struct Move {
-        double x;  // coordenada X (campo, absoluta)
-        double y;  // coordenada Y
+        double x {};  // coordenada X (campo, absoluta)
+        double y {};  // coordenada Y
 
         [[nodiscard]]
         size_t serialize(std::array<char, 64>& buffer) const {
@@ -164,7 +164,7 @@ public:
         }
     };
     struct Say {
-        std::string message;  // texto da mensagem (sem espaços, conforme protocolo)
+        std::string message {};  // texto da mensagem (sem espaços, conforme protocolo)
 
         [[nodiscard]]
         size_t serialize(std::array<char, 64>& buffer) const {
@@ -191,8 +191,8 @@ public:
         }
     };
     struct Kick {
-        double power;
-        double direction;
+        double power {};
+        double direction {};
 
         [[nodiscard]]
         size_t serialize(std::array<char, 64>& buffer) const {
@@ -234,8 +234,8 @@ public:
         }
     };
     struct Tackle {
-        double power;     // força do tackle
-        double direction; // direção (ângulo) do tackle
+        double power {};     // força do tackle
+        double direction {}; // direção (ângulo) do tackle
 
         [[nodiscard]]
         size_t serialize(std::array<char, 64>& buffer) const {
@@ -272,7 +272,7 @@ public:
         }
     };
     struct Catch {
-        double direction;  // ângulo para onde estender as mãos (para pegar a bola)
+        double direction {};  // ângulo para onde estender as mãos (para pegar a bola)
 
         [[nodiscard]]
         size_t serialize(std::array<char, 64>& buffer) const {
@@ -299,7 +299,7 @@ public:
     };
     struct ChangeView {
         enum class Width { Normal, Wide, Narrow };
-        Width width;
+        Width width {};
 
         [[nodiscard]]
         size_t serialize(std::array<char, 64>& buffer) const {
@@ -462,7 +462,7 @@ public:
             return 0;
         }
 
-        if(Environment::cycle < 150) {
+        if(Environment::cycle < 120) {
             return 0;
         }
 
@@ -589,26 +589,60 @@ public:
      * Retorna 1 se a conexão com o servidor foi encerrada.
      */
     int run() {
-        if(this->__sc.isclosed()) [[unlikely]] {
-            this->__env.logger.info(
-                std::format(
-                    "Jogador {} saiu de campo.",
-                    this->__env.unum
-                )
-            );
-            return 1;
-        }
-        // Recebemos algo do servidor
-        std::string_view message_from_server = this->__sc.receive();
 
-        // Interpretamos a mensagem
-        this->__env.wp.update_from_server(message_from_server, this->__env);
+        /* -- Percepção e Atualização -- */
+        std::string_view message_from_server {};
+        // Aguarda até receber uma mensagem válida
+        while(true) {
+
+            if(this->__sc.isclosed()) {
+                this->__env.logger.info(
+                    std::format(
+                        "Jogador {} saiu de campo.",
+                        this->__env.unum
+                    )
+                );
+                return 1;
+            }
+            // Tenta receber dados do servidor (modo bloqueante)
+            message_from_server = this->__sc.receive(false);
+            if(message_from_server.empty()) {
+                continue;  // Timeout temporário, tenta novamente
+            }
+            break;  // Mensagem recebida com sucesso
+        }
+
+        // Processa a primeira mensagem recebida
+        this->__env.wp.update_from_server(
+            message_from_server,
+            this->__env
+        );
+
+        // Loop não-bloqueante: drena o buffer do socket
+        // Processa todas as mensagens pendentes
+        while(true) {
+
+            // Tenta receber dados sem bloquear
+            message_from_server = this->__sc.receive(true);
+            if(message_from_server.empty()) {
+                break;  // Buffer do SO está vazio, não há mais dados
+            }
+            // Processa cada mensagem adicional recebida
+            this->__env.wp.update_from_server(
+                message_from_server,
+                this->__env
+            );
+        }
+
+        /* -- Ação -- */
 
         // Antes de tomarmos as decisões, devemos resetar algumas coisas
         this->body_command_flag = false;
 
         // Tomamos decisões
         this->dash(100);
+
+        /* -- Envio de Decisões -- */
 
         // Enviamos os comandos
         this->send_commands();

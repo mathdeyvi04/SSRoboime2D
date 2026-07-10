@@ -15,11 +15,11 @@
 
 int main(int argc, char** argv){
 
-    constexpr uint8_t amount = 1;
+    constexpr uint8_t amount {11};
     std::array<BasicAgent, amount> team;
 
 #ifdef MULTITHREAD
-    std::atomic<uint8_t> amount_alive = 0;
+    std::atomic<uint8_t> amount_alive {0};
     std::vector<std::thread> threads;
     for(uint8_t i = 1; i <= amount; ++i) {
 
@@ -37,7 +37,7 @@ int main(int argc, char** argv){
 #ifdef AGENT_INFO
     // Apresentação da tela
     std::cout << "\033[2J";
-    constexpr uint8_t WIDTH = 15;
+    constexpr uint8_t WIDTH {15};
 
     std::array<std::ostringstream, BasicAgent::total_attrs + 1> projetor;
     std::array<std::string, BasicAgent::total_attrs> attr_names = {
