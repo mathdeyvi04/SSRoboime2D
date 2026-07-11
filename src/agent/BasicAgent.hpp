@@ -13,6 +13,7 @@
 #include <memory>
 
 #include "../communication/ServerComm.hpp"
+#include "../communication/BasicCommands.hpp"
 #include "../environment/Environment.hpp"
 #include "../booting/TacticalFormations.hpp"
 
@@ -30,9 +31,12 @@ public:
     // Flag de verificação de visibilidade da bola
     bool ball_is_visible {false};
 
-#ifdef AGENT_INFO
+    // Permitir a apresentação de informações
+    bool verbose {false};
 
-    inline static constexpr uint8_t total_attrs {1};
+    /** @brief Número de atributos monitorados por agente */
+    inline static constexpr int total_attrs {1};
+    /** @brief Matriz 1D de atributos de todos os agentes (11 x total_attrs) */
     inline static std::array<
         float,
         /*
@@ -40,316 +44,14 @@ public:
         */
         11 * BasicAgent::total_attrs
     > each_agent_info {};
-#endif
 
-    // -- Proveremos as ações possíveis
-    struct Dash {
-        double power {};  // potência do dash (positiva para frente, negativa para trás)
-
-        [[nodiscard]]
-        size_t serialize(std::array<char, 64>& buffer) const {
-            char* ptr = buffer.data();
-
-            // Prefixo "(dash "
-            std::memcpy(
-                ptr,      // destino
-                "(dash ", // origem
-                6         // tamanho do prefixo
-            );
-            ptr += 6;
-
-            // Converte 'power' para string
-            std::to_chars_result result = std::to_chars(
-                ptr,                           // início da escrita
-                buffer.data() + buffer.size(), // limite do buffer
-                power                          // valor
-            );
-            ptr = result.ptr;
-
-            // Fecha parênteses
-            *ptr++ = ')';
-
-            return ptr - buffer.data();
-        }
-    };
-    struct Turn {
-        double angle_body {};  // ângulo de rotação (em graus, positivo para anti-horário)
-
-        [[nodiscard]]
-        size_t serialize(std::array<char, 64>& buffer) const {
-            char* ptr = buffer.data();
-
-            std::memcpy(
-                ptr,
-                "(turn ",
-                6
-            );
-            ptr += 6;
-
-            std::to_chars_result result = std::to_chars(
-                ptr,
-                buffer.data() + buffer.size(),
-                angle_body
-            );
-            ptr = result.ptr;
-
-            *ptr++ = ')';
-
-            return ptr - buffer.data();
-        }
-    };
-    struct TurnNeck {
-        double angle_head {};  // ângulo de rotação do pescoço (visão)
-
-        [[nodiscard]]
-        size_t serialize(std::array<char, 64>& buffer) const {
-            char* ptr = buffer.data();
-
-            std::memcpy(
-                ptr,
-                "(turn_neck ",
-                11
-            );
-            ptr += 11;
-
-            std::to_chars_result result = std::to_chars(
-                ptr,
-                buffer.data() + buffer.size(),
-                angle_head
-            );
-            ptr = result.ptr;
-
-            *ptr++ = ')';
-
-            return ptr - buffer.data();
-        }
-    };
-    struct Move {
-        double x {};  // coordenada X (campo, absoluta)
-        double y {};  // coordenada Y
-
-        [[nodiscard]]
-        size_t serialize(std::array<char, 64>& buffer) const {
-            char* ptr = buffer.data();
-
-            std::memcpy(
-                ptr,
-                "(move ",
-                6
-            );
-            ptr += 6;
-
-            // 1º argumento: x
-            std::to_chars_result result = std::to_chars(
-                ptr,
-                buffer.data() + buffer.size(),
-                x
-            );
-            ptr = result.ptr;
-
-            // Espaço separador
-            *ptr++ = ' ';
-
-            // 2º argumento: y
-            result = std::to_chars(
-                ptr,
-                buffer.data() + buffer.size(),
-                y
-            );
-            ptr = result.ptr;
-
-            *ptr++ = ')';
-
-            return ptr - buffer.data();
-        }
-    };
-    struct Say {
-        std::string message {};  // texto da mensagem (sem espaços, conforme protocolo)
-
-        [[nodiscard]]
-        size_t serialize(std::array<char, 64>& buffer) const {
-            char* ptr = buffer.data();
-
-            std::memcpy(
-                ptr,
-                "(say ",
-                5
-            );
-            ptr += 5;
-
-            // Copia a mensagem (sem espaços)
-            std::memcpy(
-                ptr,                     // destino
-                message.data(),          // origem
-                message.size()           // número de bytes
-            );
-            ptr += message.size();
-
-            *ptr++ = ')';
-
-            return ptr - buffer.data();
-        }
-    };
-    struct Kick {
-        double power {};
-        double direction {};
-
-        [[nodiscard]]
-        size_t serialize(std::array<char, 64>& buffer) const {
-            // Ponteiro para posição atual de escrita no buffer
-            char* ptr = buffer.data();
-
-            // Copia o prefixo do comando "(kick " para o buffer
-            std::memcpy(
-                ptr,           // destino
-                "(kick ",      // origem
-                6              // número de bytes a copiar
-            );
-            ptr += 6;
-
-            // Converte o valor 'power' para string e avança o ponteiro
-            std::to_chars_result result_power = std::to_chars(
-                ptr,                           // início da escrita
-                buffer.data() + buffer.size(), // limite do buffer
-                power                          // valor a ser convertido
-            );
-            ptr = result_power.ptr;
-
-            // Insere um espaço separador entre os argumentos
-            *ptr++ = ' ';
-
-            // Converte o valor 'direction' para string e avança o ponteiro
-            std::to_chars_result result_direction = std::to_chars(
-                ptr,                           // início da escrita
-                buffer.data() + buffer.size(), // limite do buffer
-                direction                      // valor a ser convertido
-            );
-            ptr = result_direction.ptr;
-
-            // Adiciona o parêntese de fechamento do comando
-            *ptr++ = ')';
-
-            // Retorna o número total de bytes escritos no buffer
-            return ptr - buffer.data();
-        }
-    };
-    struct Tackle {
-        double power {};     // força do tackle
-        double direction {}; // direção (ângulo) do tackle
-
-        [[nodiscard]]
-        size_t serialize(std::array<char, 64>& buffer) const {
-            char* ptr = buffer.data();
-
-            std::memcpy(
-                ptr,
-                "(tackle ",
-                8
-            );
-            ptr += 8;
-
-            // power
-            std::to_chars_result result = std::to_chars(
-                ptr,
-                buffer.data() + buffer.size(),
-                power
-            );
-            ptr = result.ptr;
-
-            *ptr++ = ' ';
-
-            // direction
-            result = std::to_chars(
-                ptr,
-                buffer.data() + buffer.size(),
-                direction
-            );
-            ptr = result.ptr;
-
-            *ptr++ = ')';
-
-            return ptr - buffer.data();
-        }
-    };
-    struct Catch {
-        double direction {};  // ângulo para onde estender as mãos (para pegar a bola)
-
-        [[nodiscard]]
-        size_t serialize(std::array<char, 64>& buffer) const {
-            char* ptr = buffer.data();
-
-            std::memcpy(
-                ptr,
-                "(catch ",
-            7
-            );
-            ptr += 7;
-
-            std::to_chars_result result = std::to_chars(
-                ptr,
-                buffer.data() + buffer.size(),
-                direction
-            );
-            ptr = result.ptr;
-
-            *ptr++ = ')';
-
-            return ptr - buffer.data();
-        }
-    };
-    struct ChangeView {
-        enum class Width { Normal, Wide, Narrow };
-        Width width {};
-
-        [[nodiscard]]
-        size_t serialize(std::array<char, 64>& buffer) const {
-            char* ptr = buffer.data();
-
-            std::memcpy(
-                ptr,
-                "(change_view ",
-                13
-            );
-            ptr += 13;
-
-            // Converte o enum para string
-            const char* width_str = nullptr;
-            switch (width) {
-                case Width::Normal: width_str = "normal"; break;
-                case Width::Wide:   width_str = "wide";   break;
-                case Width::Narrow: width_str = "narrow"; break;
-            }
-            size_t len = std::strlen(width_str);
-            std::memcpy(
-                ptr,
-                width_str,
-                len
-            );
-            ptr += len;
-
-            *ptr++ = ')';
-
-            return ptr - buffer.data();
-        }
-    };
-    using AgentAction = std::variant<
-        Dash,
-        Turn,
-        TurnNeck,
-        Move,
-        Say,
-        Kick,
-        Tackle,
-        Catch,
-        ChangeView
-    >;
     /**
      * @brief Fila de ações do agente a serem enviadas ao servidor.
      *
      * Armazena comandos representados por um variant contendo todos os tipos
      * de ações possíveis (Dash, Turn, Kick, etc.).
      */
-    std::queue<AgentAction> command_queue {};
+    std::queue<BasicCommands::AgentAction> command_queue {};
     /* Buffer Reutilizável para Serialização dos Comandos */
     std::array<char, 64> command_buffer {};
     /* Os seguintes comandos não podem ser acionados ao mesmo tempo: Dash, Turn, Kick */
@@ -369,7 +71,7 @@ public:
         std::array<char, 64>& buffer = this->command_buffer;
         while(!this->command_queue.empty()) {
             // Obtém referência para o próximo comando da fila
-            const AgentAction& action = this->command_queue.front();
+            const BasicCommands::AgentAction& action = this->command_queue.front();
 
 
             // Serializa o comando para o buffer usando std::visit
@@ -390,9 +92,16 @@ public:
         }
     }
 
-    BasicAgent() {
-        // Inicializamos todas os pontos principais
+    BasicAgent(
+        const std::string& ip,
+        int port,
+        bool verbose
+    ) :
+        __sc{ip, port}
+    {
+        // Inicializamos pontos principais
        this->__env.unum = this->__sc.unum;
+       this->verbose = verbose;
 
         // Teletransportamos o jogador para a posição correta
         this->beam(
@@ -415,7 +124,7 @@ public:
      *
      * @note Executa 3 comandos: move (teletransporte), turn (corpo), turn_neck (cabeça)
      */
-    void beam(double posx, double posy, int angle_body = 0, int angle_head = 0) {
+    void beam(double posx, double posy, double angle_body = 0, double angle_head = 0) {
         // Teletransportamos o corpo
         this->__sc.send_immediate(
             std::format(
@@ -491,7 +200,7 @@ public:
         else {
             power = std::min(power, 100.0);
         }
-        this->command_queue.push(Dash{power});
+        this->command_queue.push(BasicCommands::Dash{power});
         this->body_command_flag = true;
 
         return 1;
@@ -516,10 +225,10 @@ public:
             return 0;
         }
 
-        this->command_queue.push(Turn{angle_body});
+        this->command_queue.push(BasicCommands::Turn{angle_body});
 
         if (!angle_head) {
-            this->command_queue.push(TurnNeck{angle_head});
+            this->command_queue.push(BasicCommands::TurnNeck{angle_head});
         }
 
         this->body_command_flag = true;
@@ -545,7 +254,7 @@ public:
             return 0;
         }
 
-        this->command_queue.push(Kick{power, direction});
+        this->command_queue.push(BasicCommands::Kick{power, direction});
         this->body_command_flag = true;
 
         return 1;  // Retorno adicionado para consistência
@@ -564,7 +273,7 @@ public:
 
         // Atualizaremos o estado da bola
         this->ball_is_visible = false;
-        for(uint8_t i = 0; i < this->__env.number_visibles; ++i){
+        for(int i = 0; i < this->__env.number_visibles; ++i){
             if(this->__env.visibles_index[i] == 0) {
                 this->ball_is_visible = true;
                 break;
@@ -622,6 +331,15 @@ public:
         // Processa todas as mensagens pendentes
         while(true) {
 
+            if(this->__sc.isclosed()) {
+                this->__env.logger.info(
+                    std::format(
+                        "Jogador {} saiu de campo.",
+                        this->__env.unum
+                    )
+                );
+                return 1;
+            }
             // Tenta receber dados sem bloquear
             message_from_server = this->__sc.receive(true);
             if(message_from_server.empty()) {
@@ -647,13 +365,12 @@ public:
         // Enviamos os comandos
         this->send_commands();
 
-#ifdef AGENT_INFO
         // Populamos o vetor de informações
+        if(this->verbose) {
+            int idx = BasicAgent::total_attrs * (__env.unum - 1);
+            BasicAgent::each_agent_info[idx] = this->ball_is_visible;
+        }
 
-        uint8_t idx = BasicAgent::total_attrs * (__env.unum - 1);
-        BasicAgent::each_agent_info[idx] = this->ball_is_visible;
-
-#endif // AGENT_INFO
         return 0;
     }
 };

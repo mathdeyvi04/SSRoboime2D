@@ -1,91 +1,215 @@
-#include "./agent/BasicAgent.hpp"
 #include <array>
+#include <vector>
+#include <memory>
+#include <thread>
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <atomic>
+#include "./agent/BasicAgent.hpp"
+#include "./booting/cxxopts.hpp"
 
-#ifdef MULTITHREAD
-    #include <thread>
-    #include <vector>
+//DEPOIS QUANDO CONSTRUIR O MAKEFILE, MUDAR A FORMA QUE O CÓDIGO ESTÁ SENDO COMPILADO
 
-#ifdef AGENT_INFO
-    #include <iomanip>
-    #include <sstream>
-    #include <atomic>
+int main(int argc, char** argv) {
 
-#endif // AGENT_INFO
-#endif // MULTITHREAD
+    /* -- Parsing de Possibilidades -- */
 
-int main(int argc, char** argv){
+    // Criamos o parser do nosso binário
+    cxxopts::Options options(
+        "RoboIME_SimulationSoccer2D",
+        "Executável do tipo ELF responsável por prover à RoboIME uma equipe de jogadores apta ao ambiente de simulação futebolístico 2D provido pelo rcssserver."
+    );
 
-    constexpr uint8_t amount {11};
-    std::array<BasicAgent, amount> team;
+    // Definimos as possibilidades
+    options.add_options()
+    (
+        "p,players",
+        "Número de jogadores (1-11)",
+        cxxopts::value<int>()
+            ->default_value("11")
+    )
+    (
+        "i,ip",
+        "Endereço IPv4 do Servidor",
+        cxxopts::value<std::string>()
+            ->default_value("127.0.0.1")
+    )
+    (
+        "r,port",
+        "Porta de Acesso ao Servidor (1-65535)",
+        cxxopts::value<int>()
+            ->default_value("6000")
+    )
+    (
+        "m,multithread",
+        "Permitir execução em MultiThreading",
+        cxxopts::value<bool>()
+            ->default_value("false")
+    )
+    (
+        // Substittuirá o agent_info
+        "v,verbose",
+        "Mostrar informações extras",
+        cxxopts::value<bool>()
+            ->default_value("false")
+    )
+    (
+        "h,help",
+        "Mostrar esta mensagem que está lida"
+    );
 
-#ifdef MULTITHREAD
-    std::atomic<uint8_t> amount_alive {0};
-    std::vector<std::thread> threads;
-    for(uint8_t i = 1; i <= amount; ++i) {
+    // A partir da matriz de possibilidades acima, realizamos o parsing
+    cxxopts::ParseResult result = options.parse(argc, argv);
 
-        amount_alive++;
-        threads.emplace_back([&team, &amount_alive, i]() {
-            while (true) {
-                if (team[i - 1].run()) {
-                    amount_alive--;
+    // Realizamos algumas verificações
+    if(result.count("help")) {
+        std::cout << options.help() << "\n";
+        return 0;
+    }
+
+    // Validação do número de jogadores
+    const int amount = result["players"].as<int>();
+
+    if(amount < 1 || amount > 11) {
+        throw std::runtime_error(
+            "Time deve ter um total de jogadores maior que 1 e menor que 11."
+        );
+    }
+
+    // Validação do endereço IPv4
+    const std::string& ip = result["ip"].as<std::string>();
+
+    static const std::regex ip_pattern(
+        R"(^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$)"
+    );
+
+    if(!std::regex_match(ip, ip_pattern)) {
+        throw std::runtime_error(
+            "Endereço IPv4 inválido."
+        );
+    }
+
+    // Validação da porta
+    const int port = result["port"].as<int>();
+
+    if(port < 1024 || port > 65535) {
+        throw std::runtime_error(
+            "Porta Inválida ou Privilegiada."
+        );
+    }
+
+    const bool is_multithread = result["multithread"].as<bool>();
+    const bool verbose = result["verbose"].as<bool>();
+
+    /* -- Execução de Código -- */
+
+    std::array<std::unique_ptr<BasicAgent>, 11> team {}; // Iniciamos com máxima quantidade possível
+
+    for(int i = 0; i < amount; ++i) {
+        team[i] = std::make_unique<BasicAgent>(ip, port, verbose);
+    }
+
+    if(!is_multithread) {
+        // Executamos como single-thread
+        if(verbose) {
+            std::cout << "Executando como single-thread" << std::endl;
+        }
+
+        while(true) {
+
+            for(int i = 0; i < amount; ++i) {
+
+                if(team[i]->run()) {
+                    // Quando o primeiro quebrar conexão, todos os demais serão cortados.
                     return 0;
                 }
             }
-        });
+        }
     }
 
-#ifdef AGENT_INFO
-    // Apresentação da tela
-    std::cout << "\033[2J";
-    constexpr uint8_t WIDTH {15};
+    // Executamos como multi-thread
+    if(verbose) {
+        std::cout << "Executando como multi-thread" << std::endl;
+    }
 
-    std::array<std::ostringstream, BasicAgent::total_attrs + 1> projetor;
-    std::array<std::string, BasicAgent::total_attrs> attr_names = {
-        "ball_is_visible"
-    };
-    while(amount_alive != 0) {
+    std::atomic<int> amount_alive {0};
+    std::vector<std::thread> workers {};
+    for(int i = 0; i < amount; ++i) {
 
-        // Title Line
-        projetor[0] << std::setw(WIDTH) << "Player";
-        for(uint8_t i = 0; i < amount; ++i) {
-            projetor[0] << std::setw(WIDTH) << i + 1;
-        }
+        amount_alive++;
+        workers.emplace_back(
+            [&team, &amount_alive, i]() {
 
-        for(
-            uint8_t idx_for_attr = 0;
-            idx_for_attr < BasicAgent::total_attrs;
-            ++idx_for_attr
-        ) {
-            // Pode ser pensado adicionarmos nomes à cada atributo
-            projetor[idx_for_attr + 1] << std::setw(WIDTH) << attr_names[idx_for_attr];
-            for(uint8_t j = 0; j < amount; ++j) {
-                // Atributo x está na linha x + 1, logo:
-                projetor[idx_for_attr + 1] << std::setw(WIDTH) << BasicAgent::each_agent_info[j * BasicAgent::total_attrs + idx_for_attr];
+                while(true) {
+
+                    if(team[i]->run()) {
+                        // Caso um quebre conexão, os demais continuam
+                        amount_alive--;
+                        return 0;
+                    }
+                }
+            }
+        );
+    }
+
+    if(verbose) {
+        // Apresentaremos diversas informações de cada jogador
+
+        std::cout << "\033[2J";
+        constexpr int WIDTH {15};
+
+        std::array<std::ostringstream, BasicAgent::total_attrs + 1> projetor;
+        std::array<std::string, BasicAgent::total_attrs> attr_names = {
+            "ball_is_visible"
+        };
+
+        while(amount_alive != 0) {
+
+            // Linha de Título
+            projetor[0] << std::setw(WIDTH) << "Player";
+            for(int i = 0; i < amount; ++i) {
+
+                projetor[0] << std::setw(WIDTH) << i + 1;
+            }
+
+            // Acessamos os atributos a serem apresentados
+            // E percorremos os jogadores vendo esse atributo
+            for(
+                int idx_for_attr = 0;
+                idx_for_attr < BasicAgent::total_attrs;
+                ++idx_for_attr
+            ) {
+
+                projetor[idx_for_attr + 1] << std::setw(WIDTH) << attr_names[idx_for_attr];
+                for(int j = 0; j < amount; ++j) {
+
+                    projetor[idx_for_attr + 1] << std::setw(WIDTH) << BasicAgent::each_agent_info[j * BasicAgent::total_attrs + idx_for_attr];
+                }
+            }
+
+            // Apresentação na Tela
+            std::cout << "\033[H";
+            for(
+                // A primeira linha é constante, mas para conseguirmos limpar a tela
+                // de forma simples, preferiu-se assim
+                int i = 0;
+                i < static_cast<int>(projetor.size());
+                ++i
+            ) {
+
+                std::cout << projetor[i].str() << "\n";
+
+                // Limpando
+                projetor[i].str("");
+                projetor[i].clear();
             }
         }
-
-        // Apresentation
-        std::cout << "\033[H";
-        for(uint8_t i = 0; i < projetor.size(); ++i) {
-            std::cout << projetor[i].str() << "\n";
-            projetor[i].str("");
-            projetor[i].clear();
-        }
     }
-#endif // AGENT_INFO
-    // Espera todas as threads terminarem
-    for(auto& t : threads) {
+
+    for(std::thread& t: workers) {
         t.join();
     }
-#else
-    // Funcionamento Contínuo
-    while(true) {
-        for(uint8_t i = 1; i <= amount; ++i) {
-            if(team[i - 1].run()) {
-                return 0;
-            }
-        }
-    }
-#endif // MULTITHREAD
+
     return 0;
 }

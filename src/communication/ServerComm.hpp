@@ -13,10 +13,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cerrno>
-
-#ifdef MULTITHREAD
 #include <atomic>
-#endif
 
 #include "../booting/Booting.hpp"
 
@@ -36,11 +33,8 @@ public:
     // Precisamos do número do jogador a fim de posicioná-lo corretamente no início
     uint8_t unum = 0;
 
-#ifdef MULTITHREAD
+    /** @brief Contador de Conexões ao Servidor, será atomic inclusive para o single-thread */
     inline static std::atomic<uint8_t> number_players = 0;
-#else
-    inline static uint8_t number_players = 0;
-#endif
 
     /**
      * @brief Construtor: conecta ao servidor e realiza handshake UDP.
@@ -51,16 +45,17 @@ public:
      *          3. Reconfigura destino para a nova porta
      *          4. Aplica connect() para envio/recebimento simplificado
      */
-    ServerComm() {
+    ServerComm(const std::string& ip, int port) {
+
         this->unum = ++ServerComm::number_players;
 
         // Definições do Socket e da Comunicação
         this->__fd = socket(AF_INET, SOCK_DGRAM, 0);
         this->__serveraddr.sin_family = AF_INET;
-        this->__serveraddr.sin_port = htons(Booting::PORTSERVER);
+        this->__serveraddr.sin_port = htons(port);
         inet_pton(
             AF_INET,
-            Booting::IPSERVER,
+            ip.c_str(),
             &this->__serveraddr.sin_addr
         );
 
