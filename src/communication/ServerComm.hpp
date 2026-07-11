@@ -12,11 +12,8 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include <fcntl.h>
-
-#ifdef MULTITHREAD
+#include <cerrno>
 #include <atomic>
-#endif
 
 #include "../booting/Booting.hpp"
 
@@ -35,11 +32,9 @@ public:
 
     // Precisamos do número do jogador a fim de posicioná-lo corretamente no início
     uint8_t unum = 0;
-    #ifdef MULTITHREAD
+
+    /** @brief Contador de Conexões ao Servidor, será atomic inclusive para o single-thread */
     inline static std::atomic<uint8_t> number_players = 0;
-    #else
-    inline static uint8_t number_players = 0;
-    #endif
 
     /**
      * @brief Construtor: conecta ao servidor e realiza handshake UDP.
@@ -49,18 +44,18 @@ public:
      *          2. Recebe resposta, capturando a porta real do servidor (from.sin_port)
      *          3. Reconfigura destino para a nova porta
      *          4. Aplica connect() para envio/recebimento simplificado
-     *          5. Configura socket como não-bloqueante
      */
-    ServerComm() {
+    ServerComm(const std::string& ip, int port) {
+
         this->unum = ++ServerComm::number_players;
 
         // Definições do Socket e da Comunicação
         this->__fd = socket(AF_INET, SOCK_DGRAM, 0);
         this->__serveraddr.sin_family = AF_INET;
-        this->__serveraddr.sin_port = htons(Booting::PORTSERVER);
+        this->__serveraddr.sin_port = htons(port);
         inet_pton(
             AF_INET,
-            Booting::IPSERVER,
+            ip.c_str(),
             &this->__serveraddr.sin_addr
         );
 
@@ -98,8 +93,17 @@ public:
             reinterpret_cast<sockaddr*>(&this->__serveraddr),
             sizeof(this->__serveraddr)
         );
-        // Definimos como não bloqueante
-        fcntl(this->__fd, F_SETFL, O_NONBLOCK);
+        // Define timeout para operações de recebimento (bloqueia até timeout)
+        struct timeval tv;
+        tv.tv_sec  = 0;
+        tv.tv_usec = 200000;
+        setsockopt(
+            this->__fd,
+            SOL_SOCKET,
+            SO_RCVTIMEO,
+            &tv,
+            sizeof(tv)
+        );
     }
 
     /**
@@ -125,9 +129,11 @@ public:
     }
 
     /**
-     * @brief Envia mensagem imediatamente
+     * @brief Envia mensagem imediatamente a partir de uma string.
+     *
      * @param msg Mensagem a ser enviada.
-     * @return Se enviou alguma quantidade de bytes
+     * @return true Se pelo menos um byte foi enviado.
+     * @return false Se nenhum byte foi enviado (erro ou conexão fechada).
      */
     bool send_immediate(const std::string& msg) {
         return send(
@@ -139,47 +145,74 @@ public:
     }
 
     /**
-     * @brief Verifica se há dados disponíveis para leitura no socket.
-     * @details Acontece que a função `select` escreve nos endereços fornecidos,
-     * modificando-os, por isso temos que declará-los a cada uso na função
-     * @return 1 Se há dados (pronto para ler)
-     * @return 0 Se timeout expirou
-     * @return -1 Se erro no select
+     * @brief Envia dados binários ou texto diretamente do buffer.
+     *
+     * @param data Ponteiro para os dados a serem enviados (geralmente buffer.data()).
+     * @param size Número de bytes a serem transmitidos.
+     * @return true Se pelo menos um byte foi enviado.
+     * @return false Se nenhum byte foi enviado (erro ou conexão fechada).
      */
-    int is_readable() {
-        fd_set read_fds;
-        FD_ZERO(&read_fds);
-        FD_SET(this->__fd, &read_fds);
-        struct timeval timeout = {
-            .tv_sec = 0,
-            .tv_usec = Booting::TIMEOUTSOCKETSERVER * 1000
-        };
-
-        return select(
-            this->__fd + 1,
-            &read_fds,
-            nullptr,
-            nullptr,
-            &timeout
-        );
+    bool send_immediate(
+        const char* data,
+        size_t size
+    ) {
+        return send(
+            this->__fd,
+            data,
+            size,
+            0
+        ) > 0;
     }
 
     /**
-     * @brief Tenta receber dados do socket (não-bloqueante).
-     * @return std::string_view Dados recebidos (vazio se timeout/erro).
-     * @note Verifica disponibilidade com is_readable() antes de recv().
+     * @brief Recebe dados do servidor via socket UDP.
+     * @param non_blocking Se true, retorna imediatamente se não houver dados disponíveis.
+     * @return std::string_view Dados recebidos (vazio se timeout, erro ou sem dados).
+     * @note Após 3 timeouts consecutivos em modo bloqueante, a conexão é encerrada.
      */
-    std::string_view receive() {
-        if(this->is_readable() > 0) {
-            ssize_t n = recv(this->__fd, this->__buffer.data(), this->__buffer.size(), 0);
+    std::string_view receive(
+        bool non_blocking = false
+    ) {
+        // Proteção contra uso após fechamento
+        if (this->isclosed()) {
+            return {};
+        }
+
+        // Aguarda dados bloqueantemente
+        int n = recv(
+            this->__fd,
+            this->__buffer.data(),
+            this->__buffer.size(),
+            // Se non_blocking for true, usamos MSG_DONTWAIT para não travar caso o buffer esteja vazio
+            non_blocking ? MSG_DONTWAIT : 0
+        );
+
+        if (n > 0) {
+            // Dados recebidos com sucesso: reseta contador de desconexão
             this->__disconnect = 0;
             return {this->__buffer.data(), static_cast<size_t>(n)};
         }
-
-        if(this->__disconnect++ >= 20) {
-            this->termined();
+        else if (n == -1) {
+            // Se for MSG_DONTWAIT e não tiver mais dados, errno será EAGAIN/EWOULDBLOCK
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (!non_blocking) {
+                    // Só conta como falha/timeout real se era para ter bloqueado
+                    if (++this->__disconnect >= 3) {
+                        this->termined();
+                    }
+                }
+                return {};
+            }
+            else {
+                // Outro erro (conexão resetada, socket inválido)
+                this->termined();
+                return {};
+            }
         }
-
-        return {};
+        else {
+            // n == 0 (servidor fechou conexão, raro em UDP, mas por segurança)
+            this->termined();
+            return {};
+        }
     }
 };

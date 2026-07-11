@@ -17,24 +17,29 @@ public:
     Logger& logger = Logger::get();
     enum class PlayMode : uint8_t {
         // Neutros
-        BEFORE_KICK_OFF = 0b0000'0000,
-        PLAY_ON         = 0b0000'0001,
+        BEFORE_KICK_OFF,
+        PLAY_ON,
 
-        // Esquerda
+        // Nossos
+        OUR_KICK_OFF,
 
-        // Direita
+        // Deles
+        OPP_KICK_OFF,
     };
     // ----- Atributos Gerais Comuns a Cada Jogador
     // Apenas jogador 1 modifica essa variáveis, logo não há race conditions
-    inline static bool is_left = false;
-    inline static int cycle    = 0;
+    inline static bool is_left {false};
+    inline static int cycle    {0};
 
     inline static std::optional<Environment::PlayMode> get_play_mode(const std::string_view& key) {
         static constexpr std::array <
-            std::pair<std::string_view, std::array<Environment::PlayMode, 2>>, 2
+            std::pair<std::string_view, std::array<Environment::PlayMode, 2>>, 4
         > dict_play_modes = {{
             {"before_kick_off", {PlayMode::BEFORE_KICK_OFF, PlayMode::BEFORE_KICK_OFF}},
-            {"play_on", {PlayMode::PLAY_ON, PlayMode::PLAY_ON}}
+            {"play_on", {PlayMode::PLAY_ON, PlayMode::PLAY_ON}},
+            {"kick_off_l", {PlayMode::OUR_KICK_OFF, PlayMode::OPP_KICK_OFF}},
+            {"kick_off_r", {PlayMode::OPP_KICK_OFF, PlayMode::OPP_KICK_OFF}}
+
         }};
 
         for(const auto& elemento : dict_play_modes) {
@@ -45,32 +50,33 @@ public:
 
         return std::nullopt;
     }
-    inline static PlayMode pm;
+    inline static PlayMode pm {};
 
     // ----- Atributos Únicos a Cada Jogador
     /** @brief ID do jogador atribuído pelo servidor. */
-    uint8_t unum = 0;
+    uint8_t unum {};
 
     /** @brief Configuração de visão. [0]: Qualidade (High/Low), [1]: Largura (Narrow/Normal/Wide). */
-    std::array<uint8_t, 2> view_mode;
+    std::array<uint8_t, 2> view_mode {};
 
     /** @brief Gestão de energia. [0]: Stamina, [1]: Effort, [2]: Capacity. */
-    std::array<size_t, 3> stamina_info;
+    std::array<float, 3> stamina_info {};
+    inline static size_t stamina_max {8000}; // Assumiremos que será esse valor para todos.
 
     /** @brief Vetor velocidade relativo ao campo. [0]: vx, [1]: vy. */
     std::array<int, 2> speed = {0, 0};
 
     /** @brief Ângulo do pescoço relativo ao torso. Persiste após comando 'turn'. */
-    int head_angle = 0;
+    int head_angle {};
 
     /** @brief Point-to. [0]: Movable, [1]: Expires, [2,3]: Target(X,Y). */
-    std::array<int, 4> arm;
+    std::array<int, 4> arm {};
 
     /** @brief Foco sensorial, habilidade do jogador. [0]: Tipo, [1,2]: Meta(ID/XY), [3,4]: Pos(XY). */
-    std::array<int, 5> focus;
+    std::array<int, 5> focus {};
 
     /** @brief Status de faltas. [0]: Ativo, [1]: Cartão tomado. */
-    std::array<uint8_t, 2> fouls;
+    std::array<uint8_t, 2> fouls {};
 
     /**
      * @brief Empacota até 4 caracteres em um único inteiro de 32 bits.
@@ -93,7 +99,6 @@ public:
      * @return 255 caso a sequência não exista na tabela.
      */
     inline static uint8_t tokenstoid(const char& token1, const char& token2 = 0, const char& token3 = 0, const char& token4 = 0) {
-        // NÃO PROVEMOS INFORMAÇÕES DE LINHAAAAAAAAAAS
         static constexpr std::array<uint32_t, 60> flagtable = {
             Environment::pack('b'),                    // 0
             Environment::pack('f', 'b', '0'),          // 1
@@ -188,15 +193,15 @@ public:
         /* Acredito que seja bom deixarmos em struct para posterior adição de funcionalidades */
     };
     /** @brief Array que armazenará todas os pontos possíveis e seus respectivos dados */
-    std::array<Point, 60 + 11 * 2> points_on_the_field = {
+    std::array<Point, 60 + 11 * 2> points_on_the_field {
         /* Bola */
         /* Landmarks */
         /* Players */
     };
     /** @brief Array que  armazenará o index de todos os pontos vísiveis no momento */
-    std::array<uint8_t, 60 + 11 * 2> visibles_index;
+    std::array<uint8_t, 60 + 11 * 2> visibles_index {};
     /** @brief Variável que nos possibilitará não apagar e repopular array sempre */
-    uint8_t number_visibles = 0;
+    uint8_t number_visibles {};
 
     /**
      * @brief Agrupa todas as funcionalidades de interpretação das mensagens do servidor.
@@ -205,9 +210,9 @@ public:
     private:
 
         /** @brief Atributo que marca o ponto da mensagem que está sendo lido */
-        const char* cursor = nullptr;
+        const char* cursor = {nullptr};
         /** @brief Marcador do final da mensagem */
-        const char* end    = nullptr;
+        const char* end    = {nullptr};
 
         /**
          * @brief Avança o cursor até encontrar o caractere especificado.
@@ -526,7 +531,7 @@ public:
             this->get_next_str();
             // Reiniciamos as variáveis necessárias
             env.number_visibles = 0;
-            std::array<char, 4> tokens;
+            std::array<char, 4> tokens {};
             uint8_t number_tokens = 0;
             while(*this->cursor != ')' && (this->cursor + 2) < this->end) {
 
@@ -572,7 +577,7 @@ public:
 
                 // Não somente os jogadores, mas há a possibilidades de flags virem
                 // sem identificação
-                if(number_tokens < 2 || (number_tokens < 3 && tokens[0] == 'p')) {
+                if((number_tokens < 2 && tokens[0] != 'b') || (number_tokens < 3 && tokens[0] == 'p')) {
                     if(tokens[0] == 'p') {
                         this->cursor++;
                     }
@@ -630,14 +635,54 @@ public:
             }
         }
 
-        std::string get_region() {
-            return std::string(std::string_view(this->cursor - 20, 50));
+        void parse_hear(Environment& env) {
+            // Então sabemos que virá informações de ciclos
+            this->get_next_str();
+
+            // Teremos o sender
+            std::string_view sender = this->get_next_str();
+
+            // Com o sender, virá as possibilidades
+            switch(sender[0]) {
+
+                case 'r': {
+                    // Então referee mandou o modo
+                    std::string_view possible_mode = this->get_next_str();
+                    std::optional<Environment::PlayMode> result_from_search = Environment::get_play_mode(possible_mode);
+                    if(result_from_search.has_value()) {
+                        // std::move para não haver cópia
+                        Environment::pm = std::move(result_from_search.value());
+                    }
+                    else {
+                        env.logger.warn("Mode Unknown: {}", possible_mode);
+                    }
+
+                    return;
+                }
+
+                default: {
+                    this->skip_unknown();
+                }
+            }
         }
 
+        /**
+         * @brief Reinicia os ponteiros da região atual.
+         * @details Atribui `nullptr` a ambos os ponteiros (início e fim)
+         *          para evitar acesso indevido a memória.
+         */
         void clean() {
-            // Retornarmos seus valores ao nulo para evitar qualquer descuido
             this->cursor = nullptr;
             this->end    = nullptr;
+        }
+
+        /**
+         * @brief Extrai uma string da região de memória.
+         * @return std::string 50 caracteres, começando 20 posições antes do cursor.
+         * @warning Assume que `cursor - 20` é um endereço válido, mas pode não ser
+         */
+        std::string get_region() {
+            return std::string(std::string_view(this->cursor - 10, 50));
         }
 
     public:
@@ -710,6 +755,7 @@ public:
                 case 'h': { // hear
                     // Por enquanto, vamos apenas ignorar esse tipo de mensagem.
                     // Mas é fato que é importante e merece atenção futura.
+                    this->parse_hear(env);
                     return this->clean();
                 }
 

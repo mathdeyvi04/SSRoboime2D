@@ -15,9 +15,6 @@
 
 namespace fs = std::filesystem;
 
-#define True true
-#define False false
-
 /**
  * @brief Singleton para logging assíncrono.
  * @details Focada em performance utiliza uma lógica de fila de mensagens.
@@ -92,14 +89,14 @@ namespace fs = std::filesystem;
      std::condition_variable __cv;
      std::thread __worker;
      std::atomic<bool> __is_running;
-     std::atomic<bool> __is_the_first = True;
+     std::atomic<bool> __is_the_first = true;
      std::ofstream __file_stream;
 
       /**
      * @brief Construtor privado: Inicializa arquivo e thread.
      * @details Reservará 1000 slots para evitarmos realocações
      */
-     Logger() : __is_running(True) {
+     Logger() : __is_running(true) {
         // Reserva me´moria prévia para evitar realocações frequentes no vetor
         this->__current_buffer.reserve(30);
         this->__write_buffer.reserve(30);
@@ -164,7 +161,7 @@ namespace fs = std::filesystem;
 
             if( this->__is_the_first ){ this->__init_file();
                                         this->__worker = std::thread(&Logger::__worker_loop, this);
-                                        this->__is_the_first = False;
+                                        this->__is_the_first = false;
                                         }
         }
         // Notifica a thread de escrita que há dados

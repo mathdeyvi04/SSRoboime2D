@@ -1,13 +1,14 @@
 import customtkinter as ctk
 from tkinter import Canvas, Listbox, Event
 from tkinter import messagebox as msb, simpledialog
+from pathlib import Path
 from PIL import Image, ImageTk
 
 class AuxiliaryTacticalFormationTool(ctk.CTk):
     """
     @brief Ferramenta gráfica para criação e edição de formações táticas.
     """
-    IMG_PATH = "./src/utils/FieldImageforTacticalFormationTool.png"
+    IMG_PATH = Path(__file__).parent / "FieldImageforTacticalFormationTool.png"
 
     def __init__(self):
         """
@@ -137,7 +138,7 @@ class AuxiliaryTacticalFormationTool(ctk.CTk):
         """
         try:
             with open(
-                    "./src/booting/TacticalFormations.hpp",
+                    Path(__file__).parent.parent / "booting" / "TacticalFormations.hpp",
                     'r'
             ) as f:
                 formations = {}
@@ -279,7 +280,7 @@ class AuxiliaryTacticalFormationTool(ctk.CTk):
                 return
 
         with open(
-                "./src/booting/TacticalFormations.hpp",
+                Path(__file__).parent.parent / "booting" / "TacticalFormations.hpp",
                 'w'
         ) as f:
             f.write("#pragma once\n\n// Deve seguir exatamente o padrão que colocamos\nnamespace TacticalFormations {\n")

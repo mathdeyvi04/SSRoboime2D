@@ -1,18 +1,13 @@
-all:
-	@g++ -std=c++20 -O3 -march=native ./src/main.cpp -o ./src/main;
-	@./src/main;
+CXX_OPTIMAL = g++ -std=c++20 -O3 -march=native -pthread
+CXX_DEBUG = g++ -std=c++20 -g3 -O0 -fno-inline -march=native -pthread -Wall
 
-multithread:
-	@g++ -std=c++20 -O3 -pthread -DMULTITHREAD -march=native ./src/main.cpp -o ./src/main;
-	@./src/main;
+all:
+	@$(CXX_OPTIMAL) \
+	./src/main.cpp -o ./src/RoboIME_SimulationSoccer2D;
 
 debug:
-	@g++ -std=c++20 -g3 -O0 -fno-inline -march=native -Wall ./src/main.cpp -o ./src/debug;
-	@gdb ./src/debug;
-
-debug_multithread:
-	@g++ -std=c++20 -g3 -O0 -pthread -DMULTITHREAD -fno-inline -march=native -Wall ./src/main.cpp -o ./src/debug;
-	@gdb ./src/debug;
+	@$(CXX_DEBUG) \
+	./src/main.cpp -o ./src/debug;
 
 clean:
 	@rm -rf src/debug src/main logs
