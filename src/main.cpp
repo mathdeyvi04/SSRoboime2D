@@ -112,9 +112,6 @@ int main(int argc, char** argv) {
 
     if(!is_multithread) {
         // Executamos como single-thread
-        if(verbose) {
-            std::cout << "Executando como single-thread" << std::endl;
-        }
 
         while(true) {
 
@@ -129,10 +126,6 @@ int main(int argc, char** argv) {
     }
 
     // Executamos como multi-thread
-    if(verbose) {
-        std::cout << "Executando como multi-thread" << std::endl;
-    }
-
     std::atomic<int> amount_alive {0};
     std::vector<std::thread> workers {};
     for(int i = 0; i < amount; ++i) {
@@ -161,7 +154,9 @@ int main(int argc, char** argv) {
 
         std::array<std::ostringstream, BasicAgent::total_attrs + 1> projetor;
         std::array<std::string, BasicAgent::total_attrs> attr_names = {
-            "ball_is_visible"
+            "ball_is_visible",
+            "position_x",
+            "position_y"
         };
 
         while(amount_alive != 0) {

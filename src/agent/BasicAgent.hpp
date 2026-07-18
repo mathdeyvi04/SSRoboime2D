@@ -15,6 +15,7 @@
 #include "../communication/ServerComm.hpp"
 #include "../communication/BasicCommands.hpp"
 #include "../environment/Environment.hpp"
+#include "../environment/Localizer.hpp"
 #include "../booting/TacticalFormations.hpp"
 
 
@@ -26,6 +27,9 @@ private:
     // Painel de Variáveis de Mundo
     Environment __env;
 
+    // Localizer
+    Localizer __loc;
+
 public:
 
     // Flag de verificação de visibilidade da bola
@@ -35,12 +39,14 @@ public:
     bool verbose {false};
 
     /** @brief Número de atributos monitorados por agente */
-    inline static constexpr int total_attrs {1};
+    inline static constexpr int total_attrs {3};
     /** @brief Matriz 1D de atributos de todos os agentes (11 x total_attrs) */
     inline static std::array<
         float,
         /*
         - ball_is_visible
+        - posx
+        - posy
         */
         11 * BasicAgent::total_attrs
     > each_agent_info {};
@@ -133,6 +139,8 @@ public:
                 posy
             )
         );
+        this->__env.position[0] = posx;
+        this->__env.position[1] = posy;
 
         if(!angle_body){ return; }
         // Movemos o corpo
@@ -168,10 +176,6 @@ public:
     int dash(double power) {
 
         if(Environment::pm == Environment::PlayMode::BEFORE_KICK_OFF) {
-            return 0;
-        }
-
-        if(Environment::cycle < 120) {
             return 0;
         }
 
@@ -261,45 +265,16 @@ public:
     }
 
     /**
-     * @brief Busca a bola no ambiente e atualiza o estado de visibilidade.
-     * Esta função verifica se a bola (índice 0) está presente entre os objetos
-     * visíveis no ambiente atual. Se visível, prepara o agente para orientar-se
-     * em direção à bola (posição (0,0) neste contexto específico).
-     *
-     * @return int Sempre retorna 1 (sucesso).
-     * @note A bola é identificada pelo índice 0 no array de visíveis.
+     * @brief Processa todas as mensagens pendentes do servidor.
+     * @return int 0 se bem-sucedido, 1 se o socket foi fechado.
+     * @details
+     * 1. Bloqueia até receber a primeira mensagem (timeout)
+     * 2. Processa a mensagem recebida
+     * 3. Esvazia o buffer do socket com recepções não-bloqueantes
+     * 4. Processa todas as mensagens em fila
      */
-    int seek_the_ball() {
+    int perception_and_updation() {
 
-        // Atualizaremos o estado da bola
-        this->ball_is_visible = false;
-        for(int i = 0; i < this->__env.number_visibles; ++i){
-            if(this->__env.visibles_index[i] == 0) {
-                this->ball_is_visible = true;
-                break;
-            }
-        }
-
-        if(this->ball_is_visible) {
-            // Então vamos olhar para ela
-            // Neste caso em específico, sabemos que ela está em (0, 0)
-            // Precisamos da nossa ângulo em graus para virar a cabeça!
-        }
-
-        return 1;
-    }
-
-    /**
-     * @brief Executa um ciclo completo de Percepção, Atualização e Ação do agente.
-     * * Este métodx atua como o motor do robô. Ele escuta o servidor do simulador,
-     * atualiza a percepção de mundo do robô com base nas mensagens recebidas e
-     * toma a decisão de buscar a bola.
-     * * @return int Retorna 0 se o ciclo foi executado com sucesso;
-     * Retorna 1 se a conexão com o servidor foi encerrada.
-     */
-    int run() {
-
-        /* -- Percepção e Atualização -- */
         std::string_view message_from_server {};
         // Aguarda até receber uma mensagem válida
         while(true) {
@@ -351,16 +326,57 @@ public:
                 this->__env
             );
         }
+        return 0;
+    }
 
+    /**
+     * @brief Executa um ciclo completo de Percepção, Atualização e Ação do agente.
+     * * Este métodx atua como o motor do robô. Ele escuta o servidor do simulador,
+     * atualiza a percepção de mundo do robô com base nas mensagens recebidas e
+     * toma a decisão de buscar a bola.
+     * * @return int Retorna 0 se o ciclo foi executado com sucesso;
+     * Retorna 1 se a conexão com o servidor foi encerrada.
+     */
+    int run() {
+
+        ///////////////////////////////////////////////////////////////////
+        /* -- Percepção e Atualização -- */
+        ///////////////////////////////////////////////////////////////////
+
+        if(this->perception_and_updation()) {
+            return 1;
+        }
+
+        ///////////////////////////////////////////////////////////////////
         /* -- Ação -- */
+        ///////////////////////////////////////////////////////////////////
 
         // Antes de tomarmos as decisões, devemos resetar algumas coisas
         this->body_command_flag = false;
+        this->ball_is_visible   = false;
+        this->__loc.count_for_landmarks_visibles = 0;
 
-        // Tomamos decisões
-        this->dash(100);
+        // Atualizamos estado de visibilidade
+        for(int i = 0; i < this->__env.number_visibles; ++i) {
+            const int& index_point_visible = this->__env.visibles_index[i];
 
+            if(index_point_visible == 0) {
+                // Bola está vísivel
+                this->ball_is_visible = true;
+            }
+
+            // Verificamos posições fixas em campo
+            this->__loc.verify_landmarks(index_point_visible);
+        }
+
+        this->__loc.update_location(
+            this->__env.position,
+            this->__env.points_on_the_field
+        );
+
+        ///////////////////////////////////////////////////////////////////
         /* -- Envio de Decisões -- */
+        ///////////////////////////////////////////////////////////////////
 
         // Enviamos os comandos
         this->send_commands();
@@ -369,6 +385,8 @@ public:
         if(this->verbose) {
             int idx = BasicAgent::total_attrs * (__env.unum - 1);
             BasicAgent::each_agent_info[idx] = this->ball_is_visible;
+            BasicAgent::each_agent_info[idx + 1] = this->__env.position[0];
+            BasicAgent::each_agent_info[idx + 2] = this->__env.position[1];
         }
 
         return 0;

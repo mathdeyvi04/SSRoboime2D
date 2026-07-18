@@ -7,9 +7,11 @@
 #include <array>
 #include <charconv>
 #include <algorithm>
+#include <span>
 
 #include "../booting/Booting.hpp"
 #include "../logger/Logger.hpp"
+#include "../math/GeneralMath.hpp"
 
 class Environment {
 public:
@@ -57,26 +59,46 @@ public:
     uint8_t unum {};
 
     /** @brief Configuração de visão. [0]: Qualidade (High/Low), [1]: Largura (Narrow/Normal/Wide). */
-    std::array<uint8_t, 2> view_mode {};
+    std::array<int, 2> view_mode {};
 
     /** @brief Gestão de energia. [0]: Stamina, [1]: Effort, [2]: Capacity. */
     std::array<float, 3> stamina_info {};
     inline static size_t stamina_max {8000}; // Assumiremos que será esse valor para todos.
 
-    /** @brief Vetor velocidade relativo ao campo. [0]: vx, [1]: vy. */
-    std::array<int, 2> speed = {0, 0};
+    /** @brief Vetor de Posição do Jogador, será atualizado em Localizer {x_cart, y_cart, theta_x_hat} */
+    std::array<double, 3> position {};
+
+    /** @brief Vetor de Velocidade do Jogador {vel_x, vel_y} */
+    std::array<double, 2> vector_vel {};
+
+    /** @brief Vetor Polar velocidade relativo ao campo. {|vel|, vel_hat} */
+    std::array<double, 2> speed = {};
 
     /** @brief Ângulo do pescoço relativo ao torso. Persiste após comando 'turn'. */
-    int head_angle {};
+    double head_angle {};
 
     /** @brief Point-to. [0]: Movable, [1]: Expires, [2,3]: Target(X,Y). */
-    std::array<int, 4> arm {};
+    std::array<double, 4> arm {};
 
-    /** @brief Foco sensorial, habilidade do jogador. [0]: Tipo, [1,2]: Meta(ID/XY), [3,4]: Pos(XY). */
-    std::array<int, 5> focus {};
+    /** @brief Foco sensorial, habilidade do jogador. [0]: Tipo, [1,2]: Meta(ID/XY), [3,4]: Pos(XY).
+    todo: Necessário novo estudo sobre esse carinha. Descobriu-se que ele na verdade não é o que imaginávamos
+
+    - O Focus Point pode ser continuamente reposicionado para coincidir com a posição observada da bola.
+    Embora o servidor não possua um comando específico para "focar na bola", basta utilizar sua distância
+    e direção atuais como parâmetros do comando change_focus. Essa estratégia reduz o ruído aplicado às
+    observações da bola, tornando sua posição e trajetória mais precisas durante conduções, interceptações
+    e finalizações.
+
+    O comando change_focus pode ser enviado a cada ciclo de simulação, permitindo que o agente altere
+    continuamente a região de maior precisão visual conforme o contexto da partida. O foco pode migrar
+    da bola para um companheiro, deste para um adversário e, posteriormente, para um landmark,
+    transformando o Focus Point em um mecanismo de atenção visual dinâmica semelhante ao comportamento
+    observado em jogadores humanos.
+    */
+    std::array<double, 5> focus {};
 
     /** @brief Status de faltas. [0]: Ativo, [1]: Cartão tomado. */
-    std::array<uint8_t, 2> fouls {};
+    std::array<double, 2> fouls {};
 
     /**
      * @brief Empacota até 4 caracteres em um único inteiro de 32 bits.
@@ -166,7 +188,7 @@ public:
         if(token1 == 'p') {
             /* As seguintes parcelas representam:
             60          -> 0...59 representam a bola e as flags de campo, logo a primeira posição válida é 60.
-            token2 * 11 -> Caso sejam aliados, token2 = 0. Logo, os primeiros slots são para alieados. Mesma lógica para adversários.
+            token2 * 11 -> Caso sejam aliados, token2 = 0. Logo, os primeiros slots são para aliados. Mesma lógica para adversários.
             token3 - 1  -> número do jogador representará sua posição no array
             */
             return 60 + (token2 * 11) + (token3 - 1);
@@ -186,10 +208,26 @@ public:
     }
     /** @brief Struct que representará pontos observados pelo jogador */
     struct Point {
-        std::array<float, 4> attrs;
-        float& operator[](const int& i){
-            return this->attrs[i];
-        }
+        /** @brief Array que armazenará informações do que foi observado
+            @details Dependendo do que é, armazenará mais informações
+
+        Ponto Fixo / Bola -
+            Perto: {DistRel, DirRel, DistChange, DirChange, 99, 99}
+            Longe: {DistRel, DirRel,         99,        99, 99, 99}
+        Jogador -
+            Perto: {DistRel, DirRel, DistChange, DirChange, bodyDir, headDir}
+            Longe: {DistRel, DirRel, DistChange, DirChange,      99,      99}
+            Suficientemente longe: {DistRel, DirRel, 99, ...}
+
+        Acredito que esses valores de `Change`, o qual significa variação, são interessantes
+        no contexto de controle de erro PID e podem ser usados futuramente.
+         */
+        std::array<double, 6> attrs;
+        /** @brief Array que armazenará a posição cartesiana relativo do ponto {Px_rel, Py_rel} ao jogador */
+        std::array<double, 2> pos_cart_rel;
+        /** @brief Array que armazenará a posição cartesiana absoluta do ponto {Px, Py} ao centro */
+        std::array<double, 2> pos_cart_abs;
+
         /* Acredito que seja bom deixarmos em struct para posterior adição de funcionalidades */
     };
     /** @brief Array que armazenará todas os pontos possíveis e seus respectivos dados */
@@ -199,9 +237,9 @@ public:
         /* Players */
     };
     /** @brief Array que  armazenará o index de todos os pontos vísiveis no momento */
-    std::array<uint8_t, 60 + 11 * 2> visibles_index {};
+    std::array<int, 60 + 11 * 2> visibles_index {};
     /** @brief Variável que nos possibilitará não apagar e repopular array sempre */
-    uint8_t number_visibles {};
+    int number_visibles {};
 
     /**
      * @brief Agrupa todas as funcionalidades de interpretação das mensagens do servidor.
@@ -255,9 +293,9 @@ public:
          * @details Não verifica se chegou ao final da string, o que corrobora Segmentation Fault
          * @param init_count Número inicial de pares a ignorar (padrão=1).
          */
-        void skip_unknown(uint8_t init_count = 1) {
+        void skip_unknown(int init_count = 1) {
 
-            uint8_t count_pair = init_count;
+            int count_pair = init_count;
             while(count_pair != 0) {
                 count_pair += (*this->cursor == '(') * (1) + (*this->cursor == ')') * (-1);
                 this->cursor++;
@@ -333,6 +371,11 @@ public:
                                     elemento
                                 );
                             }
+
+                            GeneralMath::transform_polar_to_cartesian_relative(
+                                env.speed,
+                                env.vector_vel
+                            );
                         }
                         this->skip_until_char(')');
                         break;
@@ -362,7 +405,7 @@ public:
                     }
                     case 'a': { // `arm`
 
-                        for(uint8_t i = 0; i < 3; ++i) {
+                        for(int i = 0; i < 3; ++i) {
 
                             std::string_view str_value = this->get_next_str();
                             if(str_value[0] == 't') { // `target`
@@ -393,7 +436,7 @@ public:
                         this->skip_unknown();
                         break;
                     }
-                    case 'f': { // `focus`
+                    case 'f': { // `focus` `fouls` `focus_point`
                         switch(lower_tag.size()) {
                             case 5: { // `focus`
 
@@ -528,56 +571,93 @@ public:
          */
         void parse_see(Environment& env) {
 
+            // Pulamos a informação do ciclo
             this->get_next_str();
+
             // Reiniciamos as variáveis necessárias
-            env.number_visibles = 0;
+            env.number_visibles = {};
             std::array<char, 4> tokens {};
-            uint8_t number_tokens = 0;
+            int number_tokens {};
             while(*this->cursor != ')' && (this->cursor + 2) < this->end) {
 
-                /* Obter de tokens */
+                ///////////////////////////////////////////////////
+                /* Obtenção de tokens */
+                ///////////////////////////////////////////////////
+
+                // Aplicamos um deslocamento por conta dos espaçamentos que existem na mensagem `see`
                 this->cursor += 2;
+
+                // Reiniciamos variáveis para o loop
                 number_tokens = 0;
+                tokens[0] = 0; tokens[1] = 0; tokens[2] = 0; tokens[3] = 0;
                 while(*(this->cursor++) != ')') {
 
                     // Caso seja informações de jogador
                     if(*this->cursor == 'p' && !number_tokens) {
+                        // Temos algo como: (p "RoboIME" 8)
+
+                        // Pegamos o p
                         tokens[number_tokens++] = *(this->cursor++);
-                        while(*this->cursor != ')') {
-                            std::string_view str_value = this->get_next_str();
 
-                            if(number_tokens == 1) {
-                                str_value.remove_prefix(1);
-                                str_value.remove_suffix(1);
-                                // Caso seja inimigo, recebe 1. Caso aliado, recebe 0
-                                tokens[number_tokens++] = str_value != Booting::TEAMNAME;
-                                continue;
-                            }
+                        // Pegamos o nome do time
+                        std::string_view team_name = this->get_next_str();
 
-                            if(number_tokens == 2) {
-                                // Última informação útil
-                                // Tô achando que isso aqui está quebrando performance, pois transforma em string
-                                tokens[number_tokens++] = static_cast<char>(std::atoi(str_value.data()));
-                                // Não importa se é goalie
-                                this->skip_until_char(')');
-                                break;
-                            }
-                        }
+                        // Realizamos um tratamento rápido no nome
+                        team_name.remove_prefix(1);
+                        team_name.remove_suffix(1);
+                        tokens[number_tokens++] = team_name != Booting::TEAMNAME;
+
+                        // O número do jogador pode ser 10 ou 11
+                        std::string_view str_value = this->get_next_str();
+                        tokens[number_tokens++] = static_cast<char>(std::atoi(str_value.data()));
+
+                        // Às vezes vem a informação se é `goalie`, o que é inútil para o que estamos fazendo no momento
+                        // que é apenas obter uma ordenação no array
+
+                        this->skip_until_char(')');
                         break;
                     }
 
                     // Caso não seja jogador, será ou flag de campo ou bola, que vem apenas em caracteres simples
                     tokens[number_tokens++] = *(this->cursor++);
+
+                    /*
+                    Isso é para casos específicos nos quais os tokens são "(f r t 10)"
+                    Observe que o cursor parou em '0'. Daí, avançamos para o início das leituras
+                    dos valores do observado
+                    */
                     if(*this->cursor == '0') {
-                        // Pelo menos saberemos que acabou
                         this->cursor += 2;
                         break;
                     }
                 }
 
-                // Não somente os jogadores, mas há a possibilidades de flags virem
-                // sem identificação
-                if((number_tokens < 2 && tokens[0] != 'b') || (number_tokens < 3 && tokens[0] == 'p')) {
+                //////////////////////////////////////////
+                /* Obtenção do Elemento Observado */
+                //////////////////////////////////////////
+
+                // Verificação de Erros de Invalidez
+                if(
+                    /*
+                    Em condições específicas o jogador reconhece elementos da seguinte forma:
+                        (F)   // Flag desconhecida
+                        (G)   // Gol desconhecido
+                        (B)   // Bola (em algumas situações de baixa qualidade da visão)
+                        (P)   // Jogador desconhecido
+                        (L)   // Linha desconhecida (dependendo da versão/configuração)
+                    Usamos essa primeira condição para impedir que haja tentativa de compreensão dessas observações
+                    */
+                    (number_tokens < 2 && tokens[0] != 'b') ||
+                    /*
+                    Caso algum jogador chegue com menos informações que o mínimo:
+                        (p)
+                        (p "TEAM")
+                        (p "TEAM" 7)
+                    Observe que no caso que há apenas o (p), faz-se necessário um avanço para permitir o funcionamento correto
+                    de `skip_until_char`.
+                    */
+                    (number_tokens < 3 && tokens[0] == 'p')
+                ) {
                     if(tokens[0] == 'p') {
                         this->cursor++;
                     }
@@ -585,21 +665,22 @@ public:
                     continue;
                 }
 
+                // Obtemos o index correspondente
                 uint8_t index = Environment::tokenstoid(
                     tokens[0],
-                    (number_tokens >= 2) ? tokens[1] : 0,
-                    (number_tokens >= 3) ? tokens[2] : 0,
-                    (number_tokens >= 4) ? tokens[3] : 0
+                    tokens[1],
+                    tokens[2],
+                    tokens[3]
                 );
 
-                // Caso a flag não exista
+                // Verificações a existência dela
                 if(index == 255) {
                     env.logger.warn(
                         "Conjunto Inválido em parse_see: ({}, {}, {}, {})",
                         tokens[0],
-                        (number_tokens >= 2) ? tokens[1] : 0,
-                        (number_tokens >= 3) ? tokens[2] : 0,
-                        (number_tokens >= 4) ? tokens[3] : 0
+                        tokens[1],
+                        tokens[2],
+                        tokens[3]
                     );
                     this->skip_until_char(')');
                     continue;
@@ -609,32 +690,47 @@ public:
                 Environment::Point& point = env.points_on_the_field[index];
                 env.visibles_index[env.number_visibles++] = index;
 
+                //////////////////////////////////////////////////////////////////
                 /* Começamos a obtenção das informações do ponto observado */
-                uint8_t i = 0;
+                //////////////////////////////////////////////////////////////////
+
+                int i = 0;
                 while(*this->cursor != ')') {
                     std::string_view str_value = this->get_next_str();
                     std::from_chars(
                         str_value.data(),
                         str_value.data() + str_value.size(),
-                        point[i++]
+                        point.attrs[i++]
                     );
-
-                    if(i == point.attrs.size()) {
-                        this->skip_until_char(')');
-                        this->cursor--;
-                        break;
-                    }
                 }
-                while(i != point.attrs.size()) {
+                while(i != static_cast<int>(point.attrs.size())) {
                     // Quando não tiver os valores para atualizar, apenas diremos que se trata de um valor específico
-                    point[i++] = 99;
+                    point.attrs[i++] = 99;
                 }
-                // Para o caso de jogadores, está vindo mais valores do que podemos guardar!
+
+                GeneralMath::transform_polar_to_cartesian_relative(
+                    // Fazemos span para forçar a visualização de apenas os dois primeiros elementos, os quais são comuns
+                    // a qualquer observado, sendo distância relativa e ângulo relativo
+                    std::span<double, 2>(point.attrs.data(), 2),
+                    point.pos_cart_rel
+                );
 
                 this->cursor++;
             }
         }
 
+        /**
+         * @brief Processa mensagens do tipo "hear" recebidas do servidor.
+         *
+         * Analisa o remetente da mensagem e executa ação apropriada:
+         * - referee: atualiza modo de jogo
+         * - self: eco de mensagem própria
+         * - online_coach_left: mensagem do coach
+         * - número/'-': mensagem de outro jogador com ângulo
+         * - outros: ignora desconhecidos
+         *
+         * @param env Ambiente a ser atualizado (modo de jogo, logger).
+         */
         void parse_hear(Environment& env) {
             // Então sabemos que virá informações de ciclos
             this->get_next_str();
@@ -642,11 +738,12 @@ public:
             // Teremos o sender
             std::string_view sender = this->get_next_str();
 
-            // Com o sender, virá as possibilidades
+            // Com o sender, virão as possibilidades
             switch(sender[0]) {
 
-                case 'r': {
-                    // Então referee mandou o modo
+                case 'r': { // referee
+
+                    // referee mandou o modo de jogo
                     std::string_view possible_mode = this->get_next_str();
                     std::optional<Environment::PlayMode> result_from_search = Environment::get_play_mode(possible_mode);
                     if(result_from_search.has_value()) {
@@ -657,11 +754,31 @@ public:
                         env.logger.warn("Mode Unknown: {}", possible_mode);
                     }
 
+                    return; // Podemos apenas encerrar de uma vez, pois essas mensagens vem isoladas
+                }
+                case 's': { // self
+                    // Enviamos uma mensagem `say` e escutamos ela
+
                     return;
                 }
+                case 'o': { // online_coach_left
+                    // coach envia mensagens aos jogadores
 
+                    return;
+                }
                 default: {
+                    if(sender[0] == '-' || (sender[0] >= 49 && sender[0] <= 57)) {
+                        /**
+                        Então `sender` representa o ângulo no qual a mensagem foi ouvida.
+                        E a próxima string é a mensagem!
+                        */
+
+//                         std::string_view message_heard = this->get_next_str();
+
+                        return;
+                    }
                     this->skip_unknown();
+                    return;
                 }
             }
         }
@@ -682,7 +799,7 @@ public:
          * @warning Assume que `cursor - 20` é um endereço válido, mas pode não ser
          */
         std::string get_region() {
-            return std::string(std::string_view(this->cursor - 10, 50));
+            return std::string(std::string_view(this->cursor - 6, 16));
         }
 
     public:
