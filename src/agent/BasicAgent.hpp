@@ -273,7 +273,7 @@ public:
      * 3. Esvazia o buffer do socket com recepções não-bloqueantes
      * 4. Processa todas as mensagens em fila
      */
-    int perception_and_updation() {
+    int perception_and_update() {
 
         std::string_view message_from_server {};
         // Aguarda até receber uma mensagem válida
@@ -343,7 +343,7 @@ public:
         /* -- Percepção e Atualização -- */
         ///////////////////////////////////////////////////////////////////
 
-        if(this->perception_and_updation()) {
+        if(this->perception_and_update()) {
             return 1;
         }
 

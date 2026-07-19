@@ -37,17 +37,19 @@ public:
     inline static std::atomic<uint8_t> number_players = 0;
 
     /**
-     * @brief Construtor: conecta ao servidor e realiza handshake UDP.
-     * @param is_last_one Booleano que indica se o jogador é o último
-     * @details Handshake (troca de porta):
-     *          1. Envia "(init NAME (version 18))" para porta fixa (Booting::PORTSERVER)
-     *          2. Recebe resposta, capturando a porta real do servidor (from.sin_port)
-     *          3. Reconfigura destino para a nova porta
-     *          4. Aplica connect() para envio/recebimento simplificado
+     * @brief Construtor que inicializa conexão UDP com o servidor RCSS.
+     *
+     * Estabelece socket, realiza handshake com mensagem INIT e configura timeout.
+     *
+     * @param ip Endereço IP do servidor.
+     * @param port Porta do servidor.
+     * @param is_trainer_agent Se true, conecta como técnico (sem uniforme).
      */
-    ServerComm(const std::string& ip, int port) {
+    ServerComm(const std::string& ip, int port, bool is_trainer_agent = false) {
 
-        this->unum = ++ServerComm::number_players;
+        if(!is_trainer_agent) {
+            this->unum = ++ServerComm::number_players;
+        }
 
         // Definições do Socket e da Comunicação
         this->__fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -61,11 +63,16 @@ public:
 
         // Handshake
         std::string init_msg;
-        if(ServerComm::number_players == 11) {
-            init_msg = std::format("(init {} (version 18) (goalie))", Booting::TEAMNAME);
+        if(!is_trainer_agent) {
+            if(ServerComm::number_players == 11) {
+                init_msg = std::format("(init {} (version 18) (goalie))", Booting::TEAMNAME);
+            }
+            else {
+                init_msg = std::format("(init {} (version 18))", Booting::TEAMNAME);
+            }
         }
-        else {
-            init_msg = std::format("(init {} (version 18))", Booting::TEAMNAME);
+        else{
+            init_msg = "(init (version 18))";
         }
         sendto(
             this->__fd,

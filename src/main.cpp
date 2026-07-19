@@ -7,9 +7,8 @@
 #include <sstream>
 #include <atomic>
 #include "./agent/BasicAgent.hpp"
+#include "./agent/TrainerAgent.hpp"
 #include "./booting/cxxopts.hpp"
-
-//DEPOIS QUANDO CONSTRUIR O MAKEFILE, MUDAR A FORMA QUE O CÓDIGO ESTÁ SENDO COMPILADO
 
 int main(int argc, char** argv) {
 
@@ -51,6 +50,12 @@ int main(int argc, char** argv) {
         // Substittuirá o agent_info
         "v,verbose",
         "Mostrar informações extras",
+        cxxopts::value<bool>()
+            ->default_value("false")
+    )
+    (
+        "t,trainer",
+        "Executará o treinamento da equipe, abrindo um novo menu",
         cxxopts::value<bool>()
             ->default_value("false")
     )
@@ -99,10 +104,27 @@ int main(int argc, char** argv) {
         );
     }
 
-    const bool is_multithread = result["multithread"].as<bool>();
-    const bool verbose = result["verbose"].as<bool>();
+    bool is_multithread = result["multithread"].as<bool>();
+    bool verbose = result["verbose"].as<bool>();
+    bool trainer = result["trainer"].as<bool>();
 
-    /* -- Execução de Código -- */
+    if(trainer) {
+
+        ///////////////////////////////////////////
+        /* -- Execução em Modo de Treinamento -- */
+        ///////////////////////////////////////////
+        std::cout << "Entrando em menu de treinamento" << std::endl;
+        return 0;
+    }
+
+    if(verbose && !is_multithread) {
+        std::cout << "Houve um erro de interpretação, o modo `verbose` só é possível com o modo `multithread`" << std::endl;
+        verbose = false;
+    }
+
+    //////////////////////////////////////////////////
+    /* -- Execução de Equipe em Modo Operacional -- */
+    //////////////////////////////////////////////////
 
     std::array<std::unique_ptr<BasicAgent>, 11> team {}; // Iniciamos com máxima quantidade possível
 
@@ -111,8 +133,10 @@ int main(int argc, char** argv) {
     }
 
     if(!is_multithread) {
-        // Executamos como single-thread
 
+        //////////////////////////////////////////
+        // Executamos como single-thread
+        //////////////////////////////////////////
         while(true) {
 
             for(int i = 0; i < amount; ++i) {
@@ -122,10 +146,12 @@ int main(int argc, char** argv) {
                     return 0;
                 }
             }
-        }
+        } // return anterior já é a finalização
     }
 
+    //////////////////////////////////////////
     // Executamos como multi-thread
+    //////////////////////////////////////////
     std::atomic<int> amount_alive {0};
     std::vector<std::thread> workers {};
     for(int i = 0; i < amount; ++i) {
