@@ -884,6 +884,10 @@ public:
                     return this->clean(); // Vamos apenas pular essa mensagem
                 }
 
+                case 't': { // think
+                    return this->clean();
+                }
+
                 case 'w': { // warning
                     return this->clean(); // Vamos apenas pular essa mensagem
                 }

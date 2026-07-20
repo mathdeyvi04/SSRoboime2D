@@ -11,14 +11,21 @@ SERVER_ARGS=(
 	"server::game_log_dir=$LOG_DIR"
 )
 
+if [[ "$1" == "--synch" ]]; then
+	echo "Iniciando servidor no modo síncrono..."
+	SERVER_ARGS+=("server::synch_mode=true")
+fi
+
 if [[ "$1" == "--trainer_w_referee" ]]; then
 	echo "Iniciando servidor com suporte a Trainer e Árbitro..."
 	SERVER_ARGS+=("server::coach_w_referee=true")
+	SERVER_ARGS+=("server::synch_mode=true")
 fi
 
 if [[ "$1" == "--trainer" ]]; then
 	echo "Iniciando servidor com suporte a Trainer..."
 	SERVER_ARGS+=("server::coach=true")
+	SERVER_ARGS+=("server::synch_mode=true")
 fi
 
 echo "Iniciando rcssserver..."

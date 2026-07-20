@@ -35,12 +35,6 @@ public:
         while(true) {
 
             if(this->__sc.isclosed()) {
-//                this->__env.logger.info(
-//                    std::format(
-//                        "Jogador {} saiu de campo.",
-//                        this->__env.unum
-//                    )
-//                );
                 return 1;
             }
             // Tenta receber dados do servidor (modo bloqueante)
@@ -51,35 +45,23 @@ public:
             break;  // Mensagem recebida com sucesso
         }
 
-        // Processa a primeira mensagem recebida
-//        this->__env.wp.update_from_server(
-//            message_from_server,
-//            this->__env
-//        );
+        std::cout << message_from_server << std::endl;
 
         // Loop não-bloqueante: drena o buffer do socket
         // Processa todas as mensagens pendentes
         while(true) {
 
             if(this->__sc.isclosed()) {
-//                this->__env.logger.info(
-//                    std::format(
-//                        "Jogador {} saiu de campo.",
-//                        this->__env.unum
-//                    )
-//                );
                 return 1;
             }
             // Tenta receber dados sem bloquear
             message_from_server = this->__sc.receive(true);
+
             if(message_from_server.empty()) {
                 break;  // Buffer do SO está vazio, não há mais dados
             }
             // Processa cada mensagem adicional recebida
-//            this->__env.wp.update_from_server(
-//                message_from_server,
-//                this->__env
-//            );
+            std::cout << message_from_server << std::endl;
         }
         return 0;
     }
@@ -90,6 +72,7 @@ public:
             return 1;
         }
 
+        this->__sc.send_immediate("(done)");
         return 0;
     }
 };

@@ -113,8 +113,21 @@ int main(int argc, char** argv) {
         ///////////////////////////////////////////
         /* -- Execução em Modo de Treinamento -- */
         ///////////////////////////////////////////
-        std::cout << "Entrando em menu de treinamento" << std::endl;
-        return 0;
+
+        TrainerAgent T {ip, 6001, verbose};
+
+        bool at_least_one_execution = false;
+        while(true) {
+            if(T.run()) {
+                if(!at_least_one_execution) {
+                    // Então provavelmente o servidor não foi executado com
+                    // a possibilidade de um Trainer
+                    std::cout << "Não foi possível realizar conexão, talvez você não tenha executado o servidor com `--trainer`" << std::endl;
+                }
+                return 0;
+            }
+            at_least_one_execution = true;
+        }// return anterior já é a finalização
     }
 
     if(verbose && !is_multithread) {

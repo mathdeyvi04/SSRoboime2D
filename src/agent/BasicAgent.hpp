@@ -96,6 +96,9 @@ public:
             );
             command_queue.pop();
         }
+
+        // Quando servidor é executado no modo síncrono, todos precisam enviar esta mensagem
+        this->__sc.send_immediate("(done)");
     }
 
     BasicAgent(
@@ -225,6 +228,7 @@ public:
         double angle_body,
         double angle_head = 0
     ) {
+        // todo: Esse comando está gerando um travamento dos ciclos dos servidor
         if(this->body_command_flag) {
             return 0;
         }
@@ -361,7 +365,7 @@ public:
             const int& index_point_visible = this->__env.visibles_index[i];
 
             if(index_point_visible == 0) {
-                // Bola está vísivel
+                // Bola está visível
                 this->ball_is_visible = true;
             }
 

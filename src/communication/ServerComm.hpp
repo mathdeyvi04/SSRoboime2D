@@ -20,21 +20,23 @@
 class ServerComm {
 private:
     // File Descriptor do Socket
-    int __fd;
+    int __fd {};
     // Endereço e Porta do Server
-    sockaddr_in __serveraddr;
+    sockaddr_in __serveraddr {};
     // Buffer para mensagens do Server
-    std::array<char, Booting::SIZEBUFFER> __buffer;
+    std::array<char, Booting::SIZEBUFFER> __buffer {};
     // Inteiro para verificarmos se houve desconexão
-    size_t __disconnect = 0;
+    size_t __disconnect {};
+    // Flag para identificarmos se é Trainer Agent
+    bool is_trainer_agent {false};
 
 public:
 
     // Precisamos do número do jogador a fim de posicioná-lo corretamente no início
-    uint8_t unum = 0;
+    uint8_t unum {};
 
     /** @brief Contador de Conexões ao Servidor, será atomic inclusive para o single-thread */
-    inline static std::atomic<uint8_t> number_players = 0;
+    inline static std::atomic<uint8_t> number_players {};
 
     /**
      * @brief Construtor que inicializa conexão UDP com o servidor RCSS.
@@ -47,6 +49,7 @@ public:
      */
     ServerComm(const std::string& ip, int port, bool is_trainer_agent = false) {
 
+        this->is_trainer_agent = is_trainer_agent;
         if(!is_trainer_agent) {
             this->unum = ++ServerComm::number_players;
         }
@@ -111,6 +114,11 @@ public:
             &tv,
             sizeof(tv)
         );
+
+        /* Caso seja um TrainerAgent, precisamos enviar mais um comando */
+        if(is_trainer_agent) {
+            this->send_immediate("(eye on)");
+        }
     }
 
     /**
@@ -137,7 +145,7 @@ public:
 
     /**
      * @brief Envia mensagem imediatamente a partir de uma string.
-     *
+     * @details Incrementamos o size para forçar o envio do caractere nulo.
      * @param msg Mensagem a ser enviada.
      * @return true Se pelo menos um byte foi enviado.
      * @return false Se nenhum byte foi enviado (erro ou conexão fechada).
@@ -146,14 +154,14 @@ public:
         return send(
             this->__fd,
             msg.data(),
-            msg.size(),
+            msg.size() + 1,
             0
         ) > 0;
     }
 
     /**
      * @brief Envia dados binários ou texto diretamente do buffer.
-     *
+     * @details Incrementamos o size para forçar o envio do caractere nulo.
      * @param data Ponteiro para os dados a serem enviados (geralmente buffer.data()).
      * @param size Número de bytes a serem transmitidos.
      * @return true Se pelo menos um byte foi enviado.
@@ -166,7 +174,7 @@ public:
         return send(
             this->__fd,
             data,
-            size,
+            size + 1,
             0
         ) > 0;
     }
