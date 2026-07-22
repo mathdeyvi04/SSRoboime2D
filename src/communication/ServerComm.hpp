@@ -16,30 +16,26 @@
 #include <atomic>
 
 class ServerComm {
-private:
-    // File Descriptor do Socket
-    int __fd {};
-    // Endereço e Porta do Server
-    sockaddr_in __serveraddr {};
-    // Para tamanho do buffer de mensagens do servidor
-    // Sei que costuma ser menos, mas as primeiras explodem e isso pode causar confusão
-    inline static constexpr int SIZEBUFFER {4096};
-    // Tempo de TIMEOUT dos sockets de comunicação
-    inline static constexpr int TIMEOUTSOCKETSERVER {200000}; // Em milisegundos
-    // Buffer para mensagens do Server
-    std::array<char, ServerComm::SIZEBUFFER> __buffer {};
-    // Inteiro para verificarmos se houve desconexão
-    size_t __disconnect {};
-    // Flag para identificarmos se é Trainer Agent
-    bool is_trainer_agent {false};
-
 public:
-
-    // Precisamos do número do jogador a fim de posicioná-lo corretamente no início
-    uint8_t unum {};
-
+    /** @brief File Descriptor do Socket */
+    int m_fd {};
+    /** @brief Endereço e Porta do Server */
+    sockaddr_in m_serveraddr {};
+    /** @brief Para tamanho do buffer de mensagens do servidor */
+    /** @brief Sei que costuma ser menos, mas as primeiras explodem e isso pode causar confusão */
+    inline static constexpr int SIZEBUFFER {4096};
+    /** @brief Tempo de TIMEOUT dos sockets de comunicação */
+    inline static constexpr int TIMEOUTSOCKETSERVER {200000}; // Em milisegundos
+    /** @brief Buffer para mensagens do Server */
+    std::array<char, ServerComm::SIZEBUFFER> m_buffer {};
+    /** @brief Inteiro para verificarmos se houve desconexão */
+    size_t m_disconnect {};
+    /** @brief Flag para identificarmos se é Trainer Agent */
+    bool m_is_trainer_agent {false};
+    /** @brief Precisamos do número do jogador a fim de posicioná-lo corretamente no início */
+    uint8_t m_unum {};
     /** @brief Contador de Conexões ao Servidor, será atomic inclusive para o single-thread */
-    inline static std::atomic<uint8_t> number_players {};
+    inline static std::atomic<uint8_t> NUMBER_PLAYERS {};
 
     /**
      * @brief Construtor que inicializa conexão UDP com o servidor RCSS.
@@ -52,25 +48,25 @@ public:
      */
     ServerComm(const std::string& team_name, const std::string& ip, int port, bool is_trainer_agent = false) {
 
-        this->is_trainer_agent = is_trainer_agent;
-        if(!is_trainer_agent) {
-            this->unum = ++ServerComm::number_players;
+        m_is_trainer_agent = is_trainer_agent;
+        if(!m_is_trainer_agent) {
+            m_unum = ++ServerComm::NUMBER_PLAYERS;
         }
 
         // Definições do Socket e da Comunicação
-        this->__fd = socket(AF_INET, SOCK_DGRAM, 0);
-        this->__serveraddr.sin_family = AF_INET;
-        this->__serveraddr.sin_port = htons(port);
+        m_fd = socket(AF_INET, SOCK_DGRAM, 0);
+        m_serveraddr.sin_family = AF_INET;
+        m_serveraddr.sin_port = htons(port);
         inet_pton(
             AF_INET,
             ip.c_str(),
-            &this->__serveraddr.sin_addr
+            &m_serveraddr.sin_addr
         );
 
         // Handshake
         std::string init_msg;
-        if(!is_trainer_agent) {
-            if(ServerComm::number_players == 11) {
+        if(!m_is_trainer_agent) {
+            if(ServerComm::NUMBER_PLAYERS == 11) {
                 init_msg = std::format("(init {} (version 18) (goalie))", team_name);
             }
             else {
@@ -81,37 +77,37 @@ public:
             init_msg = "(init (version 18))";
         }
         sendto(
-            this->__fd,
+            m_fd,
             init_msg.c_str(),
             init_msg.size(),
             0,
-            reinterpret_cast<sockaddr*>(&this->__serveraddr),
-            sizeof(this->__serveraddr)
+            reinterpret_cast<sockaddr*>(&m_serveraddr),
+            sizeof(m_serveraddr)
         );
         sockaddr_in from;
         socklen_t fromlength = sizeof(from);
         recvfrom(
-            this->__fd,
-            this->__buffer.data(),
-            this->__buffer.size(),
+            m_fd,
+            m_buffer.data(),
+            m_buffer.size(),
             0,
             // Kernel escreverá nesses endereços
             reinterpret_cast<sockaddr*>(&from),
             &fromlength
         );
         // Troca de Portas do Server
-        this->__serveraddr.sin_port = from.sin_port;
+        m_serveraddr.sin_port = from.sin_port;
         connect(
-            this->__fd,
-            reinterpret_cast<sockaddr*>(&this->__serveraddr),
-            sizeof(this->__serveraddr)
+            m_fd,
+            reinterpret_cast<sockaddr*>(&m_serveraddr),
+            sizeof(m_serveraddr)
         );
         // Define timeout para operações de recebimento (bloqueia até timeout)
         struct timeval tv;
         tv.tv_sec  = 0;
         tv.tv_usec = ServerComm::TIMEOUTSOCKETSERVER;
         setsockopt(
-            this->__fd,
+            m_fd,
             SOL_SOCKET,
             SO_RCVTIMEO,
             &tv,
@@ -119,8 +115,8 @@ public:
         );
 
         /* Caso seja um TrainerAgent, precisamos enviar mais um comando */
-        if(is_trainer_agent) {
-            this->send_immediate("(eye on)");
+        if(m_is_trainer_agent) {
+            send_immediate("(eye on)");
         }
     }
 
@@ -131,19 +127,19 @@ public:
      * redefine o descritor do socket para 0.
      */
     void termined() {
-        this->send_immediate("(bye)");
-        close(this->__fd);
-        this->__fd = 0;
+        send_immediate("(bye)");
+        close(m_fd);
+        m_fd = 0;
     }
 
     /**
      * @brief Verifica se a conexão está encerrada.
      *
-     * @return true  Se o socket está fechado (__fd == 0)
-     * @return false Se o socket ainda está aberto (__fd != 0)
+     * @return true  Se o socket está fechado (m_fd == 0)
+     * @return false Se o socket ainda está aberto (m_fd != 0)
      */
     bool isclosed() {
-        return this->__fd == 0;
+        return m_fd == 0;
     }
 
     /**
@@ -155,7 +151,7 @@ public:
      */
     bool send_immediate(const std::string& msg) {
         return send(
-            this->__fd,
+            m_fd,
             msg.data(),
             msg.size() + 1,
             0
@@ -175,7 +171,7 @@ public:
         size_t size
     ) {
         return send(
-            this->__fd,
+            m_fd,
             data,
             size + 1,
             0
@@ -192,44 +188,44 @@ public:
         bool non_blocking = false
     ) {
         // Proteção contra uso após fechamento
-        if (this->isclosed()) {
+        if (isclosed()) {
             return {};
         }
 
         // Aguarda dados bloqueantemente
         int n = recv(
-            this->__fd,
-            this->__buffer.data(),
-            this->__buffer.size(),
+            m_fd,
+            m_buffer.data(),
+            m_buffer.size(),
             // Se non_blocking for true, usamos MSG_DONTWAIT para não travar caso o buffer esteja vazio
             non_blocking ? MSG_DONTWAIT : 0
         );
 
         if (n > 0) {
             // Dados recebidos com sucesso: reseta contador de desconexão
-            this->__disconnect = 0;
-            return {this->__buffer.data(), static_cast<size_t>(n)};
+            m_disconnect = 0;
+            return {m_buffer.data(), static_cast<size_t>(n)};
         }
         else if (n == -1) {
             // Se for MSG_DONTWAIT e não tiver mais dados, errno será EAGAIN/EWOULDBLOCK
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 if (!non_blocking) {
                     // Só conta como falha/timeout real se era para ter bloqueado
-                    if (++this->__disconnect >= 3) {
-                        this->termined();
+                    if (++m_disconnect >= 3) {
+                        termined();
                     }
                 }
                 return {};
             }
             else {
                 // Outro erro (conexão resetada, socket inválido)
-                this->termined();
+                termined();
                 return {};
             }
         }
         else {
             // n == 0 (servidor fechou conexão, raro em UDP, mas por segurança)
-            this->termined();
+            termined();
             return {};
         }
     }

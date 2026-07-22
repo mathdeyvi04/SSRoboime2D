@@ -44,7 +44,7 @@ namespace GeneralMath {
     }
 
     inline int transform_polar_to_cartesian_relative(
-        // todo: Usamos esse span, de `include <span>`, por causa do point.attrs, que tem 4 elementos!
+        // Usamos esse span, de `include <span>`, por causa do point.attrs, que tem 4 elementos!
         std::span<double, 2> polar_vector_relative,
         std::array<double, 2>& cartesian_vector_relative
     ) {

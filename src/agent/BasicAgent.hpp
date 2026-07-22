@@ -18,38 +18,39 @@
 #include "../environment/Localizer.hpp"
 #include "../booting/TacticalFormations.hpp"
 
-
 class BasicAgent {
-private:
+public:
     // Portal de Comunicações entre jogador e servidor
-    ServerComm __sc;
+    ServerComm m_sc;
 
     // Painel de Variáveis de Mundo
-    Environment __env;
+    Environment m_env;
 
     // Localizer
-    Localizer __loc;
-
-public:
+    Localizer m_loc;
 
     // Flag de verificação de visibilidade da bola
-    bool ball_is_visible {false};
+    bool m_ball_is_visible {false};
 
     // Permitir a apresentação de informações
-    bool verbose {false};
+    bool m_verbose {false};
 
     /** @brief Número de atributos monitorados por agente */
-    inline static constexpr int total_attrs {3};
-    /** @brief Matriz 1D de atributos de todos os agentes (11 x total_attrs) */
+    inline static constexpr int TOTAL_ATTRS {3};
+    /** @brief Matriz 1D de atributos de todos os agentes (11 x TOTAL_ATTRS) */
     inline static std::array<
         float,
         /*
-        - ball_is_visible
+        - m_ball_is_visible
         - posx
         - posy
         */
-        11 * BasicAgent::total_attrs
-    > each_agent_info {};
+        11 * BasicAgent::TOTAL_ATTRS
+    > EACH_AGENT_INFO {};
+
+    ////////////////////////////////////////
+    /* -- Funções de Envio de Comandos -- */
+    ////////////////////////////////////////
 
     /**
      * @brief Fila de ações do agente a serem enviadas ao servidor.
@@ -57,11 +58,11 @@ public:
      * Armazena comandos representados por um variant contendo todos os tipos
      * de ações possíveis (Dash, Turn, Kick, etc.).
      */
-    std::queue<BasicCommands::AgentAction> command_queue {};
+    std::queue<BasicCommands::AgentAction> m_command_queue {};
     /* Buffer Reutilizável para Serialização dos Comandos */
-    std::array<char, 64> command_buffer {};
+    std::array<char, 64> m_command_buffer {};
     /* Os seguintes comandos não podem ser acionados ao mesmo tempo: Dash, Turn, Kick */
-    bool body_command_flag {false};
+    bool m_body_command_flag {false};
 
     /**
      * @brief Envia todos os comandos enfileirados para o servidor.
@@ -74,10 +75,10 @@ public:
      */
     void send_commands() {
 
-        std::array<char, 64>& buffer = this->command_buffer;
-        while(!this->command_queue.empty()) {
+        std::array<char, 64>& buffer = m_command_buffer;
+        while(!m_command_queue.empty()) {
             // Obtém referência para o próximo comando da fila
-            const BasicCommands::AgentAction& action = this->command_queue.front();
+            const BasicCommands::AgentAction& action = m_command_queue.front();
 
 
             // Serializa o comando para o buffer usando std::visit
@@ -90,16 +91,20 @@ public:
                 action
             );
 
-            this->__sc.send_immediate(
+            m_sc.send_immediate(
                 buffer.data(),
                 bytes_escritos
             );
-            command_queue.pop();
+            m_command_queue.pop();
         }
 
         // Quando servidor é executado no modo síncrono, todos precisam enviar esta mensagem
-        this->__sc.send_immediate("(done)");
+        m_sc.send_immediate("(done)");
     }
+
+    /////////////////////////////
+    /* -- Definições Básicas --*/
+    /////////////////////////////
 
     BasicAgent(
         const std::string& team_name,
@@ -107,18 +112,18 @@ public:
         int port,
         bool verbose
     ) :
-        __sc{team_name, ip, port}
+        m_sc{team_name, ip, port}
     {
         // Inicializamos pontos principais
-       this->__env.unum = this->__sc.unum;
-       this->__env.team_name = std::move(team_name);
-       this->verbose = verbose;
-       this->__env.verbose = verbose;
+       m_env.m_unum = m_sc.m_unum;
+       m_env.m_team_name = std::move(team_name);
+       m_verbose = verbose;
+       m_env.m_verbose = verbose;
 
         // Teletransportamos o jogador para a posição correta
-        this->beam(
-            TacticalFormations::Default[2 * this->__env.unum - 2], // Restrito ao Booting
-            TacticalFormations::Default[2 * this->__env.unum - 2 + 1], // Restrito ao Booting
+        beam(
+            TacticalFormations::Default[2 * m_env.m_unum - 2], // Restrito ao Booting
+            TacticalFormations::Default[2 * m_env.m_unum - 2 + 1], // Restrito ao Booting
             // Inicialmente, vamos apenas passar 0 para left e 180 para right
             0,
             0
@@ -138,19 +143,19 @@ public:
      */
     void beam(double posx, double posy, double angle_body = 0, double angle_head = 0) {
         // Teletransportamos o corpo
-        this->__sc.send_immediate(
+        m_sc.send_immediate(
             std::format(
                 "(move {} {})",
                 posx,
                 posy
             )
         );
-        this->__env.position[0] = posx;
-        this->__env.position[1] = posy;
+        m_env.m_position[0] = posx;
+        m_env.m_position[1] = posy;
 
         if(!angle_body){ return; }
         // Movemos o corpo
-        this->__sc.send_immediate(
+        m_sc.send_immediate(
             std::format(
                 "(turn {})",
                 angle_body
@@ -159,7 +164,7 @@ public:
 
         if(!angle_head){ return; }
         // Movemos a cabeça
-        this->__sc.send_immediate(
+        m_sc.send_immediate(
             std::format(
                 "(turn_neck {})",
                 angle_head
@@ -181,11 +186,11 @@ public:
      */
     int dash(double power) {
 
-        if(Environment::pm == Environment::PlayMode::BEFORE_KICK_OFF) {
+        if(Environment::PM == Environment::PlayMode::BEFORE_KICK_OFF) {
             return 0;
         }
 
-        if(this->body_command_flag) {
+        if(m_body_command_flag) {
             return 0;
         }
 
@@ -201,17 +206,17 @@ public:
         À primeira vista, lidaremos apenas com stamina_info.
         */
 
-        if (this->__env.stamina_info[0] <= 3000) {
+        if (m_env.m_stamina_info[0] <= 3000) {
             power = std::min(power, 20.0);
         }
-        else if (this->__env.stamina_info[0] <= 6000) {
+        else if (m_env.m_stamina_info[0] <= 6000) {
             power = std::min(power, 60.0);
         }
         else {
             power = std::min(power, 100.0);
         }
-        this->command_queue.push(BasicCommands::Dash{power});
-        this->body_command_flag = true;
+        m_command_queue.push(BasicCommands::Dash{power});
+        m_body_command_flag = true;
 
         return 1;
     }
@@ -231,18 +236,16 @@ public:
         double angle_body,
         double angle_head = 0
     ) {
-        // todo: Esse comando está gerando um travamento dos ciclos dos servidor
-        if(this->body_command_flag) {
+        if(m_body_command_flag) {
             return 0;
         }
 
-        this->command_queue.push(BasicCommands::Turn{angle_body});
+        m_command_queue.push(BasicCommands::Turn{angle_body});
 
-        if (!angle_head) {
-            this->command_queue.push(BasicCommands::TurnNeck{angle_head});
+        if(angle_head != 0) {
+            m_command_queue.push(BasicCommands::TurnNeck{angle_head});
         }
-
-        this->body_command_flag = true;
+        m_body_command_flag = true;
         return 1;
     }
 
@@ -261,24 +264,24 @@ public:
         double power,
         double direction
     ) {
-        if(this->body_command_flag) {
+        if(m_body_command_flag) {
             return 0;
         }
 
-        this->command_queue.push(BasicCommands::Kick{power, direction});
-        this->body_command_flag = true;
+        m_command_queue.push(BasicCommands::Kick{power, direction});
+        m_body_command_flag = true;
 
         return 1;  // Retorno adicionado para consistência
     }
 
     /**
-     * @brief Processa todas as mensagens pendentes do servidor.
-     * @return int 0 se bem-sucedido, 1 se o socket foi fechado.
-     * @details
-     * 1. Bloqueia até receber a primeira mensagem (timeout)
-     * 2. Processa a mensagem recebida
-     * 3. Esvazia o buffer do socket com recepções não-bloqueantes
-     * 4. Processa todas as mensagens em fila
+     * @brief Processa mensagens do servidor para o agente e Atualiza o estado de atributos
+     *
+     * Bloqueia até receber uma mensagem válida, depois drena o buffer
+     * de mensagens pendentes (non-blocking) antes de retornar.
+     * Atualiza diversas informações como visualização da bola e localização.
+     *
+     * @return int 0 em sucesso, 1 se conexão for encerrada.
      */
     int perception_and_update() {
 
@@ -286,59 +289,98 @@ public:
         // Aguarda até receber uma mensagem válida
         while(true) {
 
-            if(this->__sc.isclosed()) {
-                if(this->verbose) {
-                    this->__env.logger.info(
+            if(m_sc.isclosed()) {
+                if(m_verbose) {
+                    m_env.m_logger.info(
                         std::format(
                             "Jogador {} saiu de campo.",
-                            this->__env.unum
+                            m_env.m_unum
                         )
                     );
                 }
                 return 1;
             }
             // Tenta receber dados do servidor (modo bloqueante)
-            message_from_server = this->__sc.receive(false);
+            message_from_server = m_sc.receive(false);
             if(message_from_server.empty()) {
-                continue;  // Timeout temporário, tenta novamente
+                // Timeout temporário, tenta novamente
+                continue;
             }
-            break;  // Mensagem recebida com sucesso
+            // Mensagem recebida com sucesso
+            break;
         }
 
         // Processa a primeira mensagem recebida
-        this->__env.wp.update_from_server(
+        m_env.m_wp.update_from_server(
             message_from_server,
-            this->__env
+            m_env
         );
 
         // Loop não-bloqueante: drena o buffer do socket
-        // Processa todas as mensagens pendentes
         while(true) {
 
-            if(this->__sc.isclosed()) {
-                if(this->verbose) {
-                    this->__env.logger.info(
+            if(m_sc.isclosed()) {
+                if(m_verbose) {
+                    m_env.m_logger.info(
                         std::format(
                             "Jogador {} saiu de campo.",
-                            this->__env.unum
+                            m_env.m_unum
                         )
                     );
                 }
                 return 1;
             }
             // Tenta receber dados sem bloquear
-            message_from_server = this->__sc.receive(true);
+            message_from_server = m_sc.receive(true);
             if(message_from_server.empty()) {
-                break;  // Buffer do SO está vazio, não há mais dados
+                // Buffer do SO está vazio, não há mais dados
+                break;
             }
             // Processa cada mensagem adicional recebida
-            this->__env.wp.update_from_server(
+            m_env.m_wp.update_from_server(
                 message_from_server,
-                this->__env
+                m_env
             );
         }
+
+        // Antes de tomarmos as decisões, devemos reinicializar algumas variáveis
+        m_body_command_flag = false;
+        m_ball_is_visible   = false;
+        m_loc.m_count_for_landmarks_visibles = 0;
+
+        // Atualizamos estado de visibilidade
+        for(int i = 0; i < m_env.m_number_visibles; ++i) {
+            const int& index_point_visible = m_env.m_visibles_index[i];
+
+            if(index_point_visible == 0) {
+                // Bola está visível
+                m_ball_is_visible = true;
+                continue;
+            }
+
+            // Verificamos posições fixas em campo
+            m_loc.verify_landmarks(index_point_visible);
+        }
+
+        m_loc.update_location(
+            m_env.m_position,
+            m_env.m_points_on_the_field
+        );
+
+        /*
+        - Pode ser bom passearmos por todos os elementos visíveis de novo atualizando os correspondentes vetores posições
+            Entretanto, isso abre espaço para perda de desempenho, tento em vista que passaremos por todos os pontos de novo.
+            Oq eu pensei foi: podemos verificar os pontos e atualizar a posição e pose assim que possível. A partir do momento
+            que tivermos o primeiro valor, podemos apenas aplicá-lo aos próximos elementos visíveis, atualizando as respectivas
+            posições. "Ah mas e os anteriores a quando tiver a posição e pose?" Será o preço pago...
+        */
+
         return 0;
     }
+
+    //////////////////////////////////////////////////////////////
+    /* -- Funções Não Triviais -- */
+    //////////////////////////////////////////////////////////////
 
     /**
      * @brief Executa um ciclo completo de Percepção, Atualização e Ação do agente.
@@ -354,7 +396,7 @@ public:
         /* -- Percepção e Atualização -- */
         ///////////////////////////////////////////////////////////////////
 
-        if(this->perception_and_update()) {
+        if(perception_and_update()) {
             return 1;
         }
 
@@ -362,42 +404,27 @@ public:
         /* -- Ação -- */
         ///////////////////////////////////////////////////////////////////
 
-        // Antes de tomarmos as decisões, devemos resetar algumas coisas
-        this->body_command_flag = false;
-        this->ball_is_visible   = false;
-        this->__loc.count_for_landmarks_visibles = 0;
 
-        // Atualizamos estado de visibilidade
-        for(int i = 0; i < this->__env.number_visibles; ++i) {
-            const int& index_point_visible = this->__env.visibles_index[i];
 
-            if(index_point_visible == 0) {
-                // Bola está visível
-                this->ball_is_visible = true;
-            }
 
-            // Verificamos posições fixas em campo
-            this->__loc.verify_landmarks(index_point_visible);
-        }
 
-        this->__loc.update_location(
-            this->__env.position,
-            this->__env.points_on_the_field
-        );
+
+
+
 
         ///////////////////////////////////////////////////////////////////
         /* -- Envio de Decisões -- */
         ///////////////////////////////////////////////////////////////////
 
         // Enviamos os comandos
-        this->send_commands();
+        send_commands();
 
         // Populamos o vetor de informações
-        if(this->verbose) {
-            int idx = BasicAgent::total_attrs * (__env.unum - 1);
-            BasicAgent::each_agent_info[idx] = this->ball_is_visible;
-            BasicAgent::each_agent_info[idx + 1] = this->__env.position[0];
-            BasicAgent::each_agent_info[idx + 2] = this->__env.position[1];
+        if(m_verbose) {
+            int idx = BasicAgent::TOTAL_ATTRS * (m_env.m_unum - 1);
+            BasicAgent::EACH_AGENT_INFO[idx] = m_ball_is_visible;
+            BasicAgent::EACH_AGENT_INFO[idx + 1] = m_env.m_position[0];
+            BasicAgent::EACH_AGENT_INFO[idx + 2] = m_env.m_position[1];
         }
 
         return 0;

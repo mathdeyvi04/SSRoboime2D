@@ -14,7 +14,7 @@ public:
     /** @brief Vetor de Informações de Pontos Fixos no Campo que poderão ser usados para localização
         @details Contém triplas sobre {index_points_field, posx_abs, posy_abs}
      */
-    inline static constexpr std::array<double, 27> info_landmarks {
+    inline static constexpr std::array<double, 27> INFO_LANDMARKS {
         12, 0,                    0,                 // f c
         24, -WIDTH_FIELD / 2,     - HEIGHT_FIELD / 2,// f l t
         14, 0,                    - HEIGHT_FIELD / 2,// f c t
@@ -27,9 +27,9 @@ public:
     };
 
     /** @brief Vetor que armazenará quais os indexs dos landmarks visíveis no array de informações de landmarks */
-    std::array<int, 9> index_info_landmarks_visibles {};
+    std::array<int, 9> m_index_info_landmarks_visibles {};
     /** @brief Contador para quantos landmarks estão visíveis */
-    int count_for_landmarks_visibles {};
+    int m_count_for_landmarks_visibles {};
 
     /**
      * @brief Verifica se um ponto visível é um landmark conhecido.
@@ -43,11 +43,11 @@ public:
             return 1;
         }
 
-        for(int i = 0; i < static_cast<int>(info_landmarks.size()); i = i + 3) {
-            if(info_landmarks[i] == index_point_visible) {
+        for(int i = 0; i < static_cast<int>(Localizer::INFO_LANDMARKS.size()); i = i + 3) {
+            if(Localizer::INFO_LANDMARKS[i] == index_point_visible) {
                 // Achamos um landmark visível
-                this->index_info_landmarks_visibles[
-                    this->count_for_landmarks_visibles++
+                m_index_info_landmarks_visibles[
+                    m_count_for_landmarks_visibles++
                 ] = i;
                 return 0;
             }
@@ -115,7 +115,7 @@ public:
     ) {
 
         // Caso não tenha a quantidade mínima de landmarks, não será possível
-        if(this->count_for_landmarks_visibles < 2) {
+        if(m_count_for_landmarks_visibles < 2) {
             return 1;
         }
 
@@ -123,21 +123,21 @@ public:
         double sum_weighted_cos {};
         std::array<double, 2> sum_weighted_positions {};
         double sum_weights {};
-        for(int i = 0; i < this->count_for_landmarks_visibles - 1; ++i) {
-            for(int j = i + 1; j < this->count_for_landmarks_visibles; ++j) {
+        for(int i = 0; i < m_count_for_landmarks_visibles - 1; ++i) {
+            for(int j = i + 1; j < m_count_for_landmarks_visibles; ++j) {
                 // Acessaremos pares (i, j) dentro de index_info_landmarks_visibles
                 // Ex: (0,1), (0,2), (1,2), (0,3), (1,3), (2,3)...
 
                 // Acessamos os landmarks visualizados
-                Environment::Point& landmark1 = points_on_the_field[Localizer::info_landmarks[index_info_landmarks_visibles[i]]];
-                landmark1.pos_cart_abs[0] = Localizer::info_landmarks[index_info_landmarks_visibles[i] + 1];
-                landmark1.pos_cart_abs[1] = Localizer::info_landmarks[index_info_landmarks_visibles[i] + 2];
-                Environment::Point& landmark2 = points_on_the_field[Localizer::info_landmarks[index_info_landmarks_visibles[j]]];
-                landmark2.pos_cart_abs[0] = Localizer::info_landmarks[index_info_landmarks_visibles[j] + 1];
-                landmark2.pos_cart_abs[1] = Localizer::info_landmarks[index_info_landmarks_visibles[j] + 2];
+                Environment::Point& landmark1 = points_on_the_field[Localizer::INFO_LANDMARKS[m_index_info_landmarks_visibles[i]]];
+                landmark1.pos_cart_abs[0] = Localizer::INFO_LANDMARKS[m_index_info_landmarks_visibles[i] + 1];
+                landmark1.pos_cart_abs[1] = Localizer::INFO_LANDMARKS[m_index_info_landmarks_visibles[i] + 2];
+                Environment::Point& landmark2 = points_on_the_field[Localizer::INFO_LANDMARKS[m_index_info_landmarks_visibles[j]]];
+                landmark2.pos_cart_abs[0] = Localizer::INFO_LANDMARKS[m_index_info_landmarks_visibles[j] + 1];
+                landmark2.pos_cart_abs[1] = Localizer::INFO_LANDMARKS[m_index_info_landmarks_visibles[j] + 2];
 
                 // Para os pontos acima, obtemos os valores de posição e de pose
-                std::array<double, 3> position_and_pose = this->calculate_position_and_pose(
+                std::array<double, 3> position_and_pose = calculate_position_and_pose(
                     landmark1.pos_cart_rel,
                     landmark1.pos_cart_abs,
                     landmark2.pos_cart_rel,

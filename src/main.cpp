@@ -170,8 +170,8 @@ int main(int argc, char** argv) {
         std::cout << "\033[2J";
         constexpr int WIDTH {15};
 
-        std::array<std::ostringstream, BasicAgent::total_attrs + 1> projetor;
-        std::array<std::string, BasicAgent::total_attrs> attr_names = {
+        std::array<std::ostringstream, BasicAgent::TOTAL_ATTRS + 1> projetor;
+        std::array<std::string, BasicAgent::TOTAL_ATTRS> attr_names = {
             "ball_is_visible",
             "position_x",
             "position_y"
@@ -190,14 +190,14 @@ int main(int argc, char** argv) {
             // E percorremos os jogadores vendo esse atributo
             for(
                 int idx_for_attr = 0;
-                idx_for_attr < BasicAgent::total_attrs;
+                idx_for_attr < BasicAgent::TOTAL_ATTRS;
                 ++idx_for_attr
             ) {
 
                 projetor[idx_for_attr + 1] << std::setw(WIDTH) << attr_names[idx_for_attr];
                 for(int j = 0; j < amount; ++j) {
 
-                    projetor[idx_for_attr + 1] << std::setw(WIDTH) << BasicAgent::each_agent_info[j * BasicAgent::total_attrs + idx_for_attr];
+                    projetor[idx_for_attr + 1] << std::setw(WIDTH) << BasicAgent::EACH_AGENT_INFO[j * BasicAgent::TOTAL_ATTRS + idx_for_attr];
                 }
             }
 
