@@ -174,7 +174,9 @@ int main(int argc, char** argv) {
         std::array<std::string, BasicAgent::TOTAL_ATTRS> attr_names = {
             "ball_is_visible",
             "position_x",
-            "position_y"
+            "position_y",
+            "body_angle",
+            "head_angle",
         };
 
         while(amount_alive != 0) {

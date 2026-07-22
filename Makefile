@@ -22,5 +22,12 @@ training:
 	@$(CXX_FAST) \
 	./src/coaching.cpp -o ./src/bin/coaching;
 
+see_total_memory:
+	@make --no-print-directory
+	@make --no-print-directory optimal
+	@make --no-print-directory debug
+	@make --no-print-directory training
+	@du -h ./src/bin/main ./src/bin/main_not_optimal ./src/bin/debug
+
 clean:
 	@rm -rf ./src/bin FileTestForWorldParser logs

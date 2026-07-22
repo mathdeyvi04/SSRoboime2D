@@ -36,7 +36,7 @@ public:
     bool m_verbose {false};
 
     /** @brief Número de atributos monitorados por agente */
-    inline static constexpr int TOTAL_ATTRS {3};
+    inline static constexpr int TOTAL_ATTRS {5};
     /** @brief Matriz 1D de atributos de todos os agentes (11 x TOTAL_ATTRS) */
     inline static std::array<
         float,
@@ -44,6 +44,8 @@ public:
         - m_ball_is_visible
         - posx
         - posy
+        - body_angle
+        - head_angle
         */
         11 * BasicAgent::TOTAL_ATTRS
     > EACH_AGENT_INFO {};
@@ -382,6 +384,13 @@ public:
     /* -- Funções Não Triviais -- */
     //////////////////////////////////////////////////////////////
 
+    int Seek(
+        double posx,
+        double posy
+    ) {
+
+    }
+
     /**
      * @brief Executa um ciclo completo de Percepção, Atualização e Ação do agente.
      * * Este métodx atua como o motor do robô. Ele escuta o servidor do simulador,
@@ -425,6 +434,8 @@ public:
             BasicAgent::EACH_AGENT_INFO[idx] = m_ball_is_visible;
             BasicAgent::EACH_AGENT_INFO[idx + 1] = m_env.m_position[0];
             BasicAgent::EACH_AGENT_INFO[idx + 2] = m_env.m_position[1];
+            BasicAgent::EACH_AGENT_INFO[idx + 3] = m_env.m_body_angle;
+            BasicAgent::EACH_AGENT_INFO[idx + 4] = m_env.m_head_angle;
         }
 
         return 0;

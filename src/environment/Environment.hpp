@@ -75,7 +75,10 @@ public:
     /** @brief Vetor Polar velocidade relativo ao campo. {|vel|, vel_hat} */
     std::array<double, 2> m_speed = {};
 
-    /** @brief Ângulo do pescoço relativo ao torso. Persiste após comando 'turn'. */
+    /** @brief Ângulo do torso. Somente alterável por `turn`. */
+    double m_body_angle {};
+
+    /** @brief Ângulo do pescoço relativo ao torso. Persiste após comando `turn`, precisando ser usado `turn_neck`. */
     double m_head_angle {};
 
     /** @brief Point-to. [0]: Movable, [1]: Expires, [2,3]: Target(X,Y). */
