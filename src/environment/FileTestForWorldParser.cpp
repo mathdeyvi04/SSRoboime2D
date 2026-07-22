@@ -22,9 +22,9 @@ static constexpr std::array<std::string_view, 8> messages_from_server {
 
 /**
 Comando de compilação pelo diretório chefe
-g++ -std=c++20 -g3 -O0 -fno-inline -march=native -pthread -Wall ./src/environment/FileTestForWorldParser.cpp -o FileTestForWorldParser
+g++ -std=c++20 -g3 -O0 -fno-inline -march=native -pthread -Wall ./src/environment/FileTestForWorldParser.cpp -o ./src/bin/FileTestForWorldParser
 Comando de execução pelo gdb
-gdb --args ./FileTestForWorldParser 5
+gdb --args ./src./bin/FileTestForWorldParser 5
 */
 int main(int argc, char* argv[]) {
 

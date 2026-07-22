@@ -1,8 +1,5 @@
 .idea/
 logs/
 venv/
+bin/
 __pycache__/
-
-main
-debug
-FileTestForWorldParser

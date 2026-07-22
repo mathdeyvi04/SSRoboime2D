@@ -7,7 +7,6 @@
 #include <sstream>
 #include <atomic>
 #include "./agent/BasicAgent.hpp"
-#include "./agent/TrainerAgent.hpp"
 #include "./booting/cxxopts.hpp"
 
 int main(int argc, char** argv) {
@@ -50,12 +49,6 @@ int main(int argc, char** argv) {
         // Substittuirá o agent_info
         "v,verbose",
         "Mostrar informações extras",
-        cxxopts::value<bool>()
-            ->default_value("false")
-    )
-    (
-        "t,trainer",
-        "Executará o treinamento da equipe, abrindo um novo menu",
         cxxopts::value<bool>()
             ->default_value("false")
     )
@@ -106,29 +99,6 @@ int main(int argc, char** argv) {
 
     bool is_multithread = result["multithread"].as<bool>();
     bool verbose = result["verbose"].as<bool>();
-    bool trainer = result["trainer"].as<bool>();
-
-    if(trainer) {
-
-        ///////////////////////////////////////////
-        /* -- Execução em Modo de Treinamento -- */
-        ///////////////////////////////////////////
-
-        TrainerAgent T {ip, 6001, verbose};
-
-        bool at_least_one_execution = false;
-        while(true) {
-            if(T.run()) {
-                if(!at_least_one_execution) {
-                    // Então provavelmente o servidor não foi executado com
-                    // a possibilidade de um Trainer
-                    std::cout << "Não foi possível realizar conexão, talvez você não tenha executado o servidor com `--trainer`" << std::endl;
-                }
-                return 0;
-            }
-            at_least_one_execution = true;
-        }// return anterior já é a finalização
-    }
 
     if(verbose && !is_multithread) {
         std::cout << "Houve um erro de interpretação, o modo `verbose` só é possível com o modo `multithread`" << std::endl;

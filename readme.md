@@ -16,28 +16,41 @@ que contém todas as informações que estávamos a buscar.
 ./call_rcsoccersim.sh 
 ```
 
-Sem o servidor, nosso código apenas entra em um modo espera que nunca funcionará mesmo se ligarmos o servidor após a inicialização do time.
+Sem o servidor, o nosso código apenas entra em um modo espera que nunca funcionará mesmo se ligarmos o servidor após a inicialização do time.
 
-## Inicialização do Time
+## Compilação de Código
 
-Há duas formas de compilação:
+Há várias formas de compilação:
 
-make
+- make
 
-Gerar-se-á um binário com máximas otimizações.
+Gerar-se-á um binário, `main_not_optimal`, sem otimizações ou qualquer informação adicional.
+
+- make optimal
+
+Gerar-se-á um binário, `main`, com máximas otimizações de desempenho. 
 
 - make debug
 
-Gerar-se-á um binário com completa informação para debugação, geralmente ordens de grandeza maior que o gerado pelo comando anterior.
+Gerar-se-á um binário, `debug`, com completa informação para debugação, geralmente ordens de grandeza maior que o gerado pelo comando anterior.
+
+- make training
+
+Gerar-se-á um binário, `coaching`, específico para aprendizados.
+
+- make clean
+
+Uma limpeza é realizada, todos os binários e a pasta de `logs` são excluídos.
 
 ## Execução
 
-Considerando desempenho de competição, `make`, vamos executar o binário:
+Considerando desempenho de competição, `make optimal`, vamos executar o binário:
 
 ```bash
-./src/RoboIME_SimulationSoccer2D -m
+./src/bin/main -m
 ```
 
+Colocamos esse caminho porque é onde o binário está localizado neste repositório. 
 Segue a mensagem de ajuda obtida com `-h` para auxiliar-lhe na escolha dos argumentos:
 
 ```text
@@ -56,4 +69,4 @@ RoboIME_SimulationSoccer2D [OPTION...]
 ```
 
 Observe que é possível inicializar com 11 jogadores, mas também com 2 usando `... -p 2`. Também é possível definir o 
-endereço do servidor e sua porta de conexão, além do excelente modo **multithread**.
+endereço do servidor e a sua porta de conexão, além do excelente modo **multithread**.

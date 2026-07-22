@@ -44,7 +44,6 @@ public:
             }
             break;  // Mensagem recebida com sucesso
         }
-
         std::cout << message_from_server << std::endl;
 
         // Loop não-bloqueante: drena o buffer do socket
@@ -71,6 +70,10 @@ public:
         if(this->perception_and_update()) {
             return 1;
         }
+
+        /*
+        O que você deseja aqui!
+        */
 
         this->__sc.send_immediate("(done)");
         return 0;
