@@ -15,12 +15,18 @@ int main(int argc, char** argv) {
 
     // Criamos o parser do nosso binário
     cxxopts::Options options(
-        "RoboIME_SimulationSoccer2D",
+        "",
         "Executável do tipo ELF responsável por prover à RoboIME uma equipe de jogadores apta ao ambiente de simulação futebolístico 2D provido pelo rcssserver."
     );
 
     // Definimos as possibilidades
     options.add_options()
+    (
+        "t,team_name",
+        "Nome do Time",
+        cxxopts::value<std::string>()
+            ->default_value("RoboIME")
+    )
     (
         "p,players",
         "Número de jogadores (1-11)",
@@ -65,6 +71,9 @@ int main(int argc, char** argv) {
         std::cout << options.help() << "\n";
         return 0;
     }
+
+    // Pegamos o nome do time
+    const std::string& team_name = result["team_name"].as<std::string>();
 
     // Validação do número de jogadores
     const int amount = result["players"].as<int>();
@@ -112,7 +121,7 @@ int main(int argc, char** argv) {
     std::array<std::unique_ptr<BasicAgent>, 11> team {}; // Iniciamos com máxima quantidade possível
 
     for(int i = 0; i < amount; ++i) {
-        team[i] = std::make_unique<BasicAgent>(ip, port, verbose);
+        team[i] = std::make_unique<BasicAgent>(team_name, ip, port, verbose);
     }
 
     if(!is_multithread) {

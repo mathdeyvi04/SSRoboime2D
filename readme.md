@@ -58,11 +58,12 @@ Executável do tipo ELF responsável por prover à RoboIME uma equipe de
 jogadores apta ao ambiente de simulação futebolístico 2D provido pelo
 rcssserver.
 Usage:
-RoboIME_SimulationSoccer2D [OPTION...]
+[OPTION...]
 
-  -p, --players arg  Número de jogadores (1-11) (default: 11)
-  -i, --ip arg       Endereço IPv4 do Servidor (default: 127.0.0.1)
-  -r, --port arg     Porta de Acesso ao Servidor (1-65535) (default: 6000)
+  -t, --team_name arg  Nome do Time (default: RoboIME)
+  -p, --players arg    Número de jogadores (1-11) (default: 11)
+  -i, --ip arg         Endereço IPv4 do Servidor (default: 127.0.0.1)
+  -r, --port arg       Porta de Acesso ao Servidor (1-65535) (default: 6000)
   -m, --multithread  Permitir execução em MultiThreading (default: false)
   -v, --verbose      Mostrar informações extras (default: false)
   -h, --help         Mostrar esta mensagem que está lida

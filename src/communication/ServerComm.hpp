@@ -15,16 +15,19 @@
 #include <cerrno>
 #include <atomic>
 
-#include "../booting/Booting.hpp"
-
 class ServerComm {
 private:
     // File Descriptor do Socket
     int __fd {};
     // Endereço e Porta do Server
     sockaddr_in __serveraddr {};
+    // Para tamanho do buffer de mensagens do servidor
+    // Sei que costuma ser menos, mas as primeiras explodem e isso pode causar confusão
+    inline static constexpr int SIZEBUFFER {4096};
+    // Tempo de TIMEOUT dos sockets de comunicação
+    inline static constexpr int TIMEOUTSOCKETSERVER {200000}; // Em milisegundos
     // Buffer para mensagens do Server
-    std::array<char, Booting::SIZEBUFFER> __buffer {};
+    std::array<char, ServerComm::SIZEBUFFER> __buffer {};
     // Inteiro para verificarmos se houve desconexão
     size_t __disconnect {};
     // Flag para identificarmos se é Trainer Agent
@@ -42,12 +45,12 @@ public:
      * @brief Construtor que inicializa conexão UDP com o servidor RCSS.
      *
      * Estabelece socket, realiza handshake com mensagem INIT e configura timeout.
-     *
+     * @param team_name Nome do Time
      * @param ip Endereço IP do servidor.
      * @param port Porta do servidor.
      * @param is_trainer_agent Se true, conecta como técnico (sem uniforme).
      */
-    ServerComm(const std::string& ip, int port, bool is_trainer_agent = false) {
+    ServerComm(const std::string& team_name, const std::string& ip, int port, bool is_trainer_agent = false) {
 
         this->is_trainer_agent = is_trainer_agent;
         if(!is_trainer_agent) {
@@ -68,10 +71,10 @@ public:
         std::string init_msg;
         if(!is_trainer_agent) {
             if(ServerComm::number_players == 11) {
-                init_msg = std::format("(init {} (version 18) (goalie))", Booting::TEAMNAME);
+                init_msg = std::format("(init {} (version 18) (goalie))", team_name);
             }
             else {
-                init_msg = std::format("(init {} (version 18))", Booting::TEAMNAME);
+                init_msg = std::format("(init {} (version 18))", team_name);
             }
         }
         else{
@@ -106,7 +109,7 @@ public:
         // Define timeout para operações de recebimento (bloqueia até timeout)
         struct timeval tv;
         tv.tv_sec  = 0;
-        tv.tv_usec = 200000;
+        tv.tv_usec = ServerComm::TIMEOUTSOCKETSERVER;
         setsockopt(
             this->__fd,
             SOL_SOCKET,

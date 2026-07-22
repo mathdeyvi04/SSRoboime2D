@@ -102,15 +102,18 @@ public:
     }
 
     BasicAgent(
+        const std::string& team_name,
         const std::string& ip,
         int port,
         bool verbose
     ) :
-        __sc{ip, port}
+        __sc{team_name, ip, port}
     {
         // Inicializamos pontos principais
        this->__env.unum = this->__sc.unum;
+       this->__env.team_name = std::move(team_name);
        this->verbose = verbose;
+       this->__env.verbose = verbose;
 
         // Teletransportamos o jogador para a posição correta
         this->beam(
@@ -284,12 +287,14 @@ public:
         while(true) {
 
             if(this->__sc.isclosed()) {
-                this->__env.logger.info(
-                    std::format(
-                        "Jogador {} saiu de campo.",
-                        this->__env.unum
-                    )
-                );
+                if(this->verbose) {
+                    this->__env.logger.info(
+                        std::format(
+                            "Jogador {} saiu de campo.",
+                            this->__env.unum
+                        )
+                    );
+                }
                 return 1;
             }
             // Tenta receber dados do servidor (modo bloqueante)
@@ -311,12 +316,14 @@ public:
         while(true) {
 
             if(this->__sc.isclosed()) {
-                this->__env.logger.info(
-                    std::format(
-                        "Jogador {} saiu de campo.",
-                        this->__env.unum
-                    )
-                );
+                if(this->verbose) {
+                    this->__env.logger.info(
+                        std::format(
+                            "Jogador {} saiu de campo.",
+                            this->__env.unum
+                        )
+                    );
+                }
                 return 1;
             }
             // Tenta receber dados sem bloquear

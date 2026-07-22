@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <span>
 
-#include "../booting/Booting.hpp"
 #include "../logger/Logger.hpp"
 #include "../math/GeneralMath.hpp"
 
@@ -32,6 +31,7 @@ public:
     // Apenas jogador 1 modifica essa variáveis, logo não há race conditions
     inline static bool is_left {false};
     inline static int cycle    {0};
+    bool verbose {false};
 
     inline static std::optional<Environment::PlayMode> get_play_mode(const std::string_view& key) {
         static constexpr std::array <
@@ -57,6 +57,7 @@ public:
     // ----- Atributos Únicos a Cada Jogador
     /** @brief ID do jogador atribuído pelo servidor. */
     uint8_t unum {};
+    std::string team_name {};
 
     /** @brief Configuração de visão. [0]: Qualidade (High/Low), [1]: Largura (Narrow/Normal/Wide). */
     std::array<int, 2> view_mode {};
@@ -605,7 +606,7 @@ public:
                         // Realizamos um tratamento rápido no nome
                         team_name.remove_prefix(1);
                         team_name.remove_suffix(1);
-                        tokens[number_tokens++] = team_name != Booting::TEAMNAME;
+                        tokens[number_tokens++] = team_name != env.team_name;
 
                         // O número do jogador pode ser 10 ou 11
                         std::string_view str_value = this->get_next_str();
@@ -675,13 +676,15 @@ public:
 
                 // Verificações a existência dela
                 if(index == 255) {
-                    env.logger.warn(
-                        "Conjunto Inválido em parse_see: ({}, {}, {}, {})",
-                        tokens[0],
-                        tokens[1],
-                        tokens[2],
-                        tokens[3]
-                    );
+                    if(env.verbose) {
+                        env.logger.warn(
+                            "Conjunto Inválido em parse_see: ({}, {}, {}, {})",
+                            tokens[0],
+                            tokens[1],
+                            tokens[2],
+                            tokens[3]
+                        );
+                    }
                     this->skip_until_char(')');
                     continue;
                 }
@@ -751,7 +754,9 @@ public:
                         Environment::pm = std::move(result_from_search.value());
                     }
                     else {
-                        env.logger.warn("Mode Unknown: {}", possible_mode);
+                        if(env.verbose) {
+                            env.logger.warn("Mode Unknown: {}", possible_mode);
+                        }
                     }
 
                     return; // Podemos apenas encerrar de uma vez, pois essas mensagens vem isoladas
@@ -839,7 +844,9 @@ public:
                         Environment::pm = std::move(result_from_search.value());
                     }
                     else {
-                        env.logger.warn("Mode Unknown: {}", possible_mode);
+                        if(env.verbose) {
+                            env.logger.warn("Mode Unknown: {}", possible_mode);
+                        }
                     }
 
                     return this->clean();
@@ -897,7 +904,9 @@ public:
                 }
 
                 default:
-                    env.logger.warn("Uppest_Tag Unknown: {} | Redondezas: {}", uppest_tag, this->get_region());
+                    if(env.verbose) {
+                        env.logger.warn("Uppest_Tag Unknown: {} | Redondezas: {}", uppest_tag, this->get_region());
+                    }
                     // Como trata-se de uma tag superior desconhecida, podemos apenas jogar o restante fora
                     return this->clean(); // Vamos apenas pular essa mensagem
             }
