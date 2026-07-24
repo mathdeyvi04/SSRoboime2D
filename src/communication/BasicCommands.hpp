@@ -7,6 +7,26 @@
 #include <array>
 
 namespace BasicCommands {
+    struct Done {
+        [[nodiscard]]
+        size_t serialize(std::array<char, 64>& buffer) const {
+            char* ptr = buffer.data();
+
+            // Prefixo "(done"
+            std::memcpy(
+                ptr,      // destino
+                "(done", // origem
+                5         // tamanho do prefixo
+            );
+            ptr += 5;
+
+            // Fecha parênteses
+            *ptr++ = ')';
+            *ptr++ = '\0';
+
+            return ptr - buffer.data();
+        }
+    };
     struct Dash {
         double power {};  // potência do dash (positiva para frente, negativa para trás)
 
@@ -32,6 +52,7 @@ namespace BasicCommands {
 
             // Fecha parênteses
             *ptr++ = ')';
+            *ptr++ = '\0';
 
             return ptr - buffer.data();
         }
@@ -58,6 +79,7 @@ namespace BasicCommands {
             ptr = result.ptr;
 
             *ptr++ = ')';
+            *ptr++ = '\0';
 
             return ptr - buffer.data();
         }
@@ -84,6 +106,7 @@ namespace BasicCommands {
             ptr = result.ptr;
 
             *ptr++ = ')';
+            *ptr++ = '\0';
 
             return ptr - buffer.data();
         }
@@ -123,6 +146,7 @@ namespace BasicCommands {
             ptr = result.ptr;
 
             *ptr++ = ')';
+            *ptr++ = '\0';
 
             return ptr - buffer.data();
         }
@@ -150,6 +174,7 @@ namespace BasicCommands {
             ptr += message.size();
 
             *ptr++ = ')';
+            *ptr++ = '\0';
 
             return ptr - buffer.data();
         }
@@ -192,6 +217,7 @@ namespace BasicCommands {
 
             // Adiciona o parêntese de fechamento do comando
             *ptr++ = ')';
+            *ptr++ = '\0';
 
             // Retorna o número total de bytes escritos no buffer
             return ptr - buffer.data();
@@ -231,6 +257,7 @@ namespace BasicCommands {
             ptr = result.ptr;
 
             *ptr++ = ')';
+            *ptr++ = '\0';
 
             return ptr - buffer.data();
         }
@@ -257,6 +284,7 @@ namespace BasicCommands {
             ptr = result.ptr;
 
             *ptr++ = ')';
+            *ptr++ = '\0';
 
             return ptr - buffer.data();
         }
@@ -292,11 +320,13 @@ namespace BasicCommands {
             ptr += len;
 
             *ptr++ = ')';
+            *ptr++ = '\0';
 
             return ptr - buffer.data();
         }
     };
     using AgentAction = std::variant<
+        Done,
         Dash,
         Turn,
         TurnNeck,

@@ -30,7 +30,9 @@ public:
     // ----- Atributos Gerais Comuns a Cada Jogador
     // Apenas jogador 1 modifica essa variáveis, logo não há race conditions
     inline static bool IS_LEFT {false};
-    inline static int CYCLE    {0};
+    inline static int CYCLE {0};
+    inline static int CYCLE_SEE {0};
+    inline static int CYCLE_SENSE {0};
     bool m_verbose {false};
 
     inline static std::optional<Environment::PlayMode> get_play_mode(const std::string_view& key) {
@@ -85,7 +87,7 @@ public:
     std::array<double, 4> m_arm {};
 
     /** @brief Foco sensorial, habilidade do jogador. [0]: Tipo, [1,2]: Meta(ID/XY), [3,4]: Pos(XY).
-    todo: Necessário novo estudo sobre esse carinha. Descobriu-se que ele na verdade não é o que imaginávamos
+    todo lazy: Necessário novo estudo sobre esse carinha. Descobriu-se que ele na verdade não é o que imaginávamos
 
     - O Focus Point pode ser continuamente reposicionado para coincidir com a posição observada da bola.
     Embora o servidor não possua um comando específico para "focar na bola", basta utilizar sua distância
@@ -216,7 +218,7 @@ public:
         /** @brief Array que armazenará informações do que foi observado
             @details Dependendo do que é, armazenará mais informações
 
-        Ponto Fixo / Bola -
+        Ponto Fixo (Landmark) / Bola -
             Perto: {DistRel, DirRel, DistChange, DirChange, 99, 99}
             Longe: {DistRel, DirRel,         99,        99, 99, 99}
         Jogador -
@@ -325,7 +327,7 @@ public:
             // Por algum motivo, o primeiro valor está separado.
             std::string_view str_cycle = get_next_str();
             if(env.m_unum == 1) {
-                std::from_chars(str_cycle.data(), str_cycle.data() + str_cycle.size(), Environment::CYCLE);
+                std::from_chars(str_cycle.data(), str_cycle.data() + str_cycle.size(), Environment::CYCLE_SENSE);
             }
             while(true) {
 
@@ -577,7 +579,10 @@ public:
         void parse_see(Environment& env) {
 
             // Pulamos a informação do ciclo
-            get_next_str();
+            std::string_view str_cycle = get_next_str();
+            if(env.m_unum == 1) {
+                std::from_chars(str_cycle.data(), str_cycle.data() + str_cycle.size(), Environment::CYCLE_SEE);
+            }
 
             // Reiniciamos as variáveis necessárias
             env.m_number_visibles = {};
@@ -802,15 +807,6 @@ public:
             m_end    = nullptr;
         }
 
-        /**
-         * @brief Extrai uma string da região de memória.
-         * @return std::string 50 caracteres, começando 20 posições antes do cursor.
-         * @warning Assume que `cursor - 20` é um endereço válido, mas pode não ser
-         */
-        std::string get_region() {
-            return std::string(std::string_view(m_cursor - 6, 16));
-        }
-
     public:
 
         /**
@@ -861,14 +857,14 @@ public:
                     switch (uppest_tag.size()) {
 
                         case 3: { // see
-
                             parse_see(env);
+                            Environment::CYCLE = std::max(Environment::CYCLE_SENSE, Environment::CYCLE_SEE);
                             return clean();
                         }
 
                         case 10: { // sense_body
-
                             parse_sensebody(env);
+                            Environment::CYCLE = std::max(Environment::CYCLE_SENSE, Environment::CYCLE_SEE);
                             return clean();
                         }
 
@@ -900,6 +896,14 @@ public:
                 }
 
                 case 'w': { // warning
+                    if(env.m_verbose) {
+                        env.m_logger.warn(
+                            "Last Cycle Receive: {} | P {} Received Warning From Server: {}",
+                            Environment::CYCLE,
+                            env.m_unum,
+                            std::string_view {message_from_server.data(), message_from_server.size() - 1}
+                        );
+                    }
                     return clean(); // Vamos apenas pular essa mensagem
                 }
 
@@ -909,7 +913,12 @@ public:
 
                 default:
                     if(env.m_verbose) {
-                        env.m_logger.warn("Uppest_Tag Unknown: {} | Redondezas: {}", uppest_tag, get_region());
+                        env.m_logger.error(
+                            "Last Cycle Receive: {} | P {} Received Error From Server: {}",
+                            Environment::CYCLE,
+                            env.m_unum,
+                            std::string_view {message_from_server.data(), message_from_server.size() - 1}
+                        );
                     }
                     // Como trata-se de uma tag superior desconhecida, podemos apenas jogar o restante fora
                     return clean(); // Vamos apenas pular essa mensagem

@@ -1,6 +1,13 @@
 #pragma once
 
-// Cuidado ao utilizar esses parâmetros
+namespace Agent {
+    /* Relacionados ao Seek_and_Focus */
+    inline constexpr double MIN_ANGLE_TO_TURN_NECK = 2.0;
+    inline constexpr double MIN_ANGLE_TO_TURN_BODY_AND_FOLLOW_NECK = 40.0;
+    inline constexpr double PARAM_TO_TURN_NECK_ON_SEEK_AND_FOCUS = 0.75;
+    inline constexpr double MIN_DIF_ANGLE_TO_BODY_FOLLOW_HEAD = 40;
+} // namespace agent
+
 namespace rcss {
     namespace server {
         // Distância máxima para audição de mensagens
@@ -262,22 +269,22 @@ namespace rcss {
         
         // Fator de variação para incremento de stamina
         inline constexpr double new_stamina_inc_max_delta_factor = -6000.0;
-        
+
         // Variação de decaimento do jogador
         inline constexpr double player_decay_delta_max = 0.1;
         inline constexpr double player_decay_delta_min = -0.1;
-        
+
         // Variação de velocidade máxima do jogador
         inline constexpr double player_speed_max_delta_max = 0.0;
         inline constexpr double player_speed_max_delta_min = 0.0;
-        
+
         // Parâmetros de tipos e aleatoriedade
         inline constexpr int pt_max = 1;
         inline constexpr long random_seed = 1776538395L;
         inline constexpr double stamina_inc_max_delta_factor = 0.0;
-        
+
         // Máximo de substituições permitidas
         inline constexpr int subs_max = 3;
-        
+
     } // namespace player
 } // namespace rcss

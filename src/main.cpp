@@ -177,6 +177,7 @@ int main(int argc, char** argv) {
             "position_y",
             "body_angle",
             "head_angle",
+            "m_value"
         };
 
         while(amount_alive != 0) {

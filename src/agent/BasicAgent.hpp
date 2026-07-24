@@ -11,12 +11,16 @@
 #include <cstring>
 #include <string>
 #include <memory>
+#include <chrono>
+#include <thread>
 
 #include "../communication/ServerComm.hpp"
 #include "../communication/BasicCommands.hpp"
 #include "../environment/Environment.hpp"
 #include "../environment/Localizer.hpp"
 #include "../booting/TacticalFormations.hpp"
+#include "../booting/SoccerParams.hpp"
+#include "../math/GeneralMath.hpp"
 
 class BasicAgent {
 public:
@@ -35,20 +39,25 @@ public:
     // Permitir a apresentação de informações
     bool m_verbose {false};
 
+    /** @brief Temporizador entre ciclos, terá como base o valor de 100 ms */
+    std::chrono::milliseconds m_target_duration;
+
     /** @brief Número de atributos monitorados por agente */
-    inline static constexpr int TOTAL_ATTRS {5};
-    /** @brief Matriz 1D de atributos de todos os agentes (11 x TOTAL_ATTRS) */
-    inline static std::array<
-        float,
-        /*
-        - m_ball_is_visible
-        - posx
-        - posy
-        - body_angle
-        - head_angle
-        */
-        11 * BasicAgent::TOTAL_ATTRS
-    > EACH_AGENT_INFO {};
+    inline static constexpr int TOTAL_ATTRS {6};
+
+    /** @brief Matriz 1D de atributos de todos os agentes (11 x TOTAL_ATTRS)
+     *  - m_ball_is_visible
+     *  - m_position_x
+     *  - m_position_y
+     *  - m_body_angle
+     *  - m_head_angle
+     *  - m_value
+     *  Usando essa estrutura, não precisaremos nos preocupar com índices ou ordem
+     */
+    inline static GeneralMath::smart_array<11 * BasicAgent::TOTAL_ATTRS> EACH_AGENT_INFO {};
+
+    /** @brief Valor Aleatório que será utilizado quando necessário. Pense nele como aquelas flags da CPU */
+    double m_value {};
 
     ////////////////////////////////////////
     /* -- Funções de Envio de Comandos -- */
@@ -77,11 +86,15 @@ public:
      */
     void send_commands() {
 
+        // Quando servidor é executado no modo síncrono, todos precisam enviar esta mensagem
+        m_command_queue.push(BasicCommands::Done{});
+
+        // todo urgent: Deve ser provida uma maneira de impedir que comandos de corpo sejam enviados no mesmo ciclo, pode ser usado os counters e outras lógicas de priorização
         std::array<char, 64>& buffer = m_command_buffer;
+        std::string message_sended_to_server {};
         while(!m_command_queue.empty()) {
             // Obtém referência para o próximo comando da fila
             const BasicCommands::AgentAction& action = m_command_queue.front();
-
 
             // Serializa o comando para o buffer usando std::visit
             // O visit resolve o tipo em tempo de compilação
@@ -93,15 +106,19 @@ public:
                 action
             );
 
+            if(m_verbose) {
+                message_sended_to_server.append(std::string_view {buffer.data(), bytes_escritos});
+            }
             m_sc.send_immediate(
                 buffer.data(),
                 bytes_escritos
             );
             m_command_queue.pop();
         }
-
-        // Quando servidor é executado no modo síncrono, todos precisam enviar esta mensagem
-        m_sc.send_immediate("(done)");
+        // Apenas quando julgar necessário
+        if(m_verbose && !message_sended_to_server.empty()) {
+            m_env.m_logger.info("Last Cycle Received: {} | P {} send: {}", Environment::CYCLE, m_env.m_unum, message_sended_to_server);
+        }
     }
 
     /////////////////////////////
@@ -112,9 +129,11 @@ public:
         const std::string& team_name,
         const std::string& ip,
         int port,
-        bool verbose
+        bool verbose,
+        float speed = 2.0 // Desejamos que seja mais rápido que trainer
     ) :
-        m_sc{team_name, ip, port}
+        m_sc{team_name, ip, port},
+        m_target_duration{static_cast<const unsigned long>(100 * speed)}
     {
         // Inicializamos pontos principais
        m_env.m_unum = m_sc.m_unum;
@@ -125,155 +144,23 @@ public:
         // Teletransportamos o jogador para a posição correta
         beam(
             TacticalFormations::Default[2 * m_env.m_unum - 2], // Restrito ao Booting
-            TacticalFormations::Default[2 * m_env.m_unum - 2 + 1], // Restrito ao Booting
-            // Inicialmente, vamos apenas passar 0 para left e 180 para right
-            0,
-            0
+            TacticalFormations::Default[2 * m_env.m_unum - 2 + 1] // Restrito ao Booting
         );
-    };
+    }
 
     /**
      * @brief Teletransporta o agente para posição absoluta no campo. Também é capaz de
-     * movimentar a cabeça do jogador
-     *
+     * movimentar a cabeça do jogador. Essa função somente é executada uma vez.
      * @param posx Coordenada X (-52 a 52)
      * @param posy Coordenada Y (-34 a 34)
-     * @param angle_body Ângulo do corpo (graus)
-     * @param angle_head Ângulo da cabeça (graus)
-     *
      * @note Executa 3 comandos: move (teletransporte), turn (corpo), turn_neck (cabeça)
      */
-    void beam(double posx, double posy, double angle_body = 0, double angle_head = 0) {
-        // Teletransportamos o corpo
-        m_sc.send_immediate(
-            std::format(
-                "(move {} {})",
-                posx,
-                posy
-            )
+    void beam(double posx, double posy) {
+        m_command_queue.push(
+            BasicCommands::Move {posx, posy}
         );
         m_env.m_position[0] = posx;
         m_env.m_position[1] = posy;
-
-        if(!angle_body){ return; }
-        // Movemos o corpo
-        m_sc.send_immediate(
-            std::format(
-                "(turn {})",
-                angle_body
-            )
-        );
-
-        if(!angle_head){ return; }
-        // Movemos a cabeça
-        m_sc.send_immediate(
-            std::format(
-                "(turn_neck {})",
-                angle_head
-            )
-        );
-    }
-
-    /**
-     * @brief Executa ação de correr (dash) com potência adaptativa.
-     * @return 1 Se o dash foi executado.
-     * @return 0 Se ainda não é momento de dash (pré-jogo ou contador não atingido).
-     *
-     * @details
-     * - Não age durante o modo BEFORE_KICK_OFF.
-     * - Potência baseada na stamina atual:
-     *   - >6000 -> 100%
-     *   - >3000 -> 60%
-     *   - ≤3000 -> 20%
-     */
-    int dash(double power) {
-
-        if(Environment::PM == Environment::PlayMode::BEFORE_KICK_OFF) {
-            return 0;
-        }
-
-        if(m_body_command_flag) {
-            return 0;
-        }
-
-        /* Deve-se fazer juízo de 3 fatores para a utilização dessa função:
-        - Urgência Tática
-            Dependendo do que está acontecendo na partida
-        - Distância à bola ou jogador específico
-            Caso a bola esteja suficientemente perto do jogador
-        - Stamina_info
-            Apenas uma função de actual_stamina, effort e capacity. Esses valores afetam
-            drasticamente o dash e é necessário um gerenciamento de energia inteligente.
-
-        À primeira vista, lidaremos apenas com stamina_info.
-        */
-
-        if (m_env.m_stamina_info[0] <= 3000) {
-            power = std::min(power, 20.0);
-        }
-        else if (m_env.m_stamina_info[0] <= 6000) {
-            power = std::min(power, 60.0);
-        }
-        else {
-            power = std::min(power, 100.0);
-        }
-        m_command_queue.push(BasicCommands::Dash{power});
-        m_body_command_flag = true;
-
-        return 1;
-    }
-
-    /**
-     * @brief Executa rotação do corpo e opcionalmente do pescoço.
-     *
-     * @param angle_body Ângulo de rotação do corpo em graus (positivo = anti-horário).
-     * @param angle_head Ângulo de rotação do pescoço em graus (padrão = 0).
-     *
-     * @return int 1 se o comando foi enfileirado com sucesso, 0 se o corpo já possui comando pendente.
-     *
-     * @note Apenas um comando corporal pode ser enfileirado por ciclo.
-     * @note Se angle_head não for fornecido, nenhum comando de pescoço é enfileirado.
-     */
-    int turn(
-        double angle_body,
-        double angle_head = 0
-    ) {
-        if(m_body_command_flag) {
-            return 0;
-        }
-
-        m_command_queue.push(BasicCommands::Turn{angle_body});
-
-        if(angle_head != 0) {
-            m_command_queue.push(BasicCommands::TurnNeck{angle_head});
-        }
-        m_body_command_flag = true;
-        return 1;
-    }
-
-    /**
-     * @brief Executa um chute na bola com potência e direção especificadas.
-     *
-     * @param power Potência do chute (0-100).
-     * @param direction Direção do chute em graus relativa à orientação atual do corpo.
-     *
-     * @return int 1 se o comando foi enfileirado com sucesso, 0 se o corpo já possui comando pendente.
-     *
-     * @note Apenas um comando corporal pode ser enfileirado por ciclo.
-     * @note A direção é relativa ao corpo do agente, não absoluta no campo.
-     */
-    int kick(
-        double power,
-        double direction
-    ) {
-        if(m_body_command_flag) {
-            return 0;
-        }
-
-        m_command_queue.push(BasicCommands::Kick{power, direction});
-        m_body_command_flag = true;
-
-        return 1;  // Retorno adicionado para consistência
     }
 
     /**
@@ -352,7 +239,7 @@ public:
 
         // Atualizamos estado de visibilidade
         for(int i = 0; i < m_env.m_number_visibles; ++i) {
-            const int& index_point_visible = m_env.m_visibles_index[i];
+            const int index_point_visible = m_env.m_visibles_index[i];
 
             if(index_point_visible == 0) {
                 // Bola está visível
@@ -364,6 +251,7 @@ public:
             m_loc.verify_landmarks(index_point_visible);
         }
 
+        // todo urgent: Ainda não há uma forma de atualizarmos a posição sem vermos os landmarks
         m_loc.update_location(
             m_env.m_position,
             m_env.m_points_on_the_field
@@ -380,15 +268,240 @@ public:
         return 0;
     }
 
-    //////////////////////////////////////////////////////////////
+    ////////////////////////////////
     /* -- Funções Não Triviais -- */
-    //////////////////////////////////////////////////////////////
+    ////////////////////////////////
 
-    int Seek(
-        double posx,
-        double posy
+    /**
+     * @brief Função Auxiliar para Seek_and_Focus: Ângulos (em graus) para cada índice, calculados a partir dos tokens
+     * direcionais segundo a convenção do servidor:
+     *  - bottom (b) → y positivo (+90°)
+     *  - top    (t) → y negativo (-90°)
+     *  - left   (l) → x negativo (180°)
+     *  - right  (r) → x positivo (0°)
+     *  - center (c) → (0,0)
+     *
+     * O primeiro token de cada sequência é ignorado (categoria), os demais
+     * são somados vetorialmente. O ângulo resultante é arredondado para
+     * múltiplos de 45°.
+     */
+    static constexpr std::array<double, 60> DIRECTION_ANGLES = {
+         0.0,    // 0   "b"
+        90.0,    // 1   "fb0"
+       135.0,    // 2   "fbl1"
+       135.0,    // 3   "fbl2"
+       135.0,    // 4   "fbl3"
+       135.0,    // 5   "fbl4"
+       135.0,    // 6   "fbl5"
+        45.0,    // 7   "fbr1"
+        45.0,    // 8   "fbr2"
+        45.0,    // 9   "fbr3"
+        45.0,    // 10  "fbr4"
+        45.0,    // 11  "fbr5"
+         0.0,    // 12  "fc"
+        90.0,    // 13  "fcb"
+       -90.0,    // 14  "fct"
+       135.0,    // 15  "fglb"
+      -135.0,    // 16  "fglt"
+        45.0,    // 17  "fgrb"
+       -45.0,    // 18  "fgrt"
+       180.0,    // 19  "fl0"
+       135.0,    // 20  "flb"
+       135.0,    // 21  "flb1"
+       135.0,    // 22  "flb2"
+       135.0,    // 23  "flb3"
+      -135.0,    // 24  "flt"
+      -135.0,    // 25  "flt1"
+      -135.0,    // 26  "flt2"
+      -135.0,    // 27  "flt3"
+       135.0,    // 28  "fplb"
+       180.0,    // 29  "fplc"
+      -135.0,    // 30  "fplt"
+        45.0,    // 31  "fprb"
+         0.0,    // 32  "fprc"
+       -45.0,    // 33  "fprt"
+         0.0,    // 34  "fr0"
+        45.0,    // 35  "frb"
+        45.0,    // 36  "frb1"
+        45.0,    // 37  "frb2"
+        45.0,    // 38  "frb3"
+       -45.0,    // 39  "frt"
+       -45.0,    // 40  "frt1"
+       -45.0,    // 41  "frt2"
+       -45.0,    // 42  "frt3"
+       -90.0,    // 43  "ft0"
+      -135.0,    // 44  "ftl1"
+      -135.0,    // 45  "ftl2"
+      -135.0,    // 46  "ftl3"
+      -135.0,    // 47  "ftl4"
+      -135.0,    // 48  "ftl5"
+       -45.0,    // 49  "ftr1"
+       -45.0,    // 50  "ftr2"
+       -45.0,    // 51  "ftr3"
+       -45.0,    // 52  "ftr4"
+       -45.0,    // 53  "ftr5"
+       180.0,    // 54  "gl"
+         0.0,    // 55  "gr"
+        90.0,    // 56  "lb"
+       180.0,    // 57  "ll"
+         0.0,    // 58  "lr"
+       -90.0     // 59  "lt"
+    };
+
+    /** @brief Counter para contarmos quantas vezes estamos usando informações desatualizadas */
+    int m_use_outdated_information_seek_and_focus {};
+
+    /**
+     * @brief Direciona a visão do agente (corpo e/ou pescoço) para um ponto desejado.
+     *
+     * @param index_in_points_on_the_field  Índice do ponto no campo (1-59 para pontos fixos,
+     *                                      qualquer outro valor para busca dinâmica; 0 ou negativo
+     *                                      para bola/jogadores ou coordenadas manuais).
+     * @param force_full_body               Se true, o agente gira completamente o corpo para o alvo,
+     *                                      zerando o ângulo do pescoço. Padrão false.
+     * @param posx_to_focus                 Coordenada X de foco quando nenhum ponto é encontrado (padrão 99.0).
+     * @param posy_to_focus                 Coordenada Y de foco quando nenhum ponto é encontrado (padrão 99.0).
+     * @return 0 sempre (sucesso).
+     */
+    int Seek_and_Focus(
+        int index_in_points_on_the_field,
+        bool force_full_body = false,
+        double posx_to_focus = 99.0,
+        double posy_to_focus = 99.0
     ) {
 
+        // Vamos deixar aqui comentado e disponível, pois nunca se sabe quando pode vir a ser um problema de novo
+//        if(Environment::CYCLE_SENSE != Environment::CYCLE_SEE) {
+//            if(m_verbose) {
+//                m_env.m_logger.info("Cycle(see) {} | Cycle(sense) {}, P {} blocked Seek_and_Focus", Environment::CYCLE_SEE, Environment::CYCLE_SENSE, m_env.m_unum);
+//            }
+//            return 1;
+//        }
+
+        bool is_initialized {false};
+        double angle_relative {0};
+        if(index_in_points_on_the_field >= 1 && index_in_points_on_the_field <= 59) {
+            /*
+            Então é um elemento real do campo e FIXO, o que é vantajoso.
+            */
+            angle_relative = BasicAgent::DIRECTION_ANGLES[index_in_points_on_the_field] - (m_env.m_head_angle + m_env.m_body_angle);
+            m_use_outdated_information_seek_and_focus = 0;
+            is_initialized = true;
+        }
+        if(index_in_points_on_the_field >= 0 && !is_initialized) {
+            /*
+            Então pode ser a bola ou demais jogadores
+            */
+            for(int i = 0; i < m_env.m_number_visibles; ++i) {
+                if(index_in_points_on_the_field == m_env.m_visibles_index[i]) {
+                    // Então está visível
+                    // O campo [1] de attrs de point já fornecerá o ângulo relativo.
+                    Environment::Point& point = m_env.m_points_on_the_field[index_in_points_on_the_field];
+                    angle_relative = point.attrs[1];
+                    m_use_outdated_information_seek_and_focus = 0;
+                    is_initialized = true;
+                    break;
+                }
+            }
+            if(!is_initialized) {
+                /*
+                Então não está visível, utilizaremos a última informação visual dele.
+                Caso fiquemos travados nessa informação visual desatualizada, vamos forçar giros.
+                */
+                Environment::Point& point = m_env.m_points_on_the_field[index_in_points_on_the_field];
+                angle_relative = point.attrs[1] + (m_use_outdated_information_seek_and_focus++) * 30;
+                is_initialized = true;
+            }
+        }
+        if(!is_initialized) {
+            // Então é apenas um ponto no campo
+            angle_relative = GeneralMath::angle_of_vector(m_env.m_position[0] - posx_to_focus, m_env.m_position[1] - posy_to_focus);
+            angle_relative = GeneralMath::normalize_angle(
+                angle_relative - (m_env.m_head_angle + m_env.m_body_angle)
+            );
+            m_use_outdated_information_seek_and_focus = 0;
+            is_initialized = true;
+        }
+
+        // Caso esteja abaixo deste limite, então nem devemos fazer nada
+        if(std::abs(angle_relative) < Agent::MIN_ANGLE_TO_TURN_NECK) {
+            return 0;
+        }
+
+        // todo lazy: Observe que consideramos que todos os comandos foram bem sucedidos. O que não é necessariamente verdade. Além disso, quando se está em movimento, os ângulos girados não são exatamente esses, há uma pequena inconsistência.
+        angle_relative *= Agent::PARAM_TO_TURN_NECK_ON_SEEK_AND_FOCUS;
+
+        // Se forçado, gira o corpo totalmente para o alvo e zera o pescoço
+        if(force_full_body) {
+            double target_body_angle = GeneralMath::normalize_angle(m_env.m_body_angle + m_env.m_head_angle + angle_relative);
+            double body_turn = GeneralMath::normalize_angle(target_body_angle - m_env.m_body_angle);
+            if(std::abs(body_turn) > Agent::MIN_ANGLE_TO_TURN_NECK) {
+                m_command_queue.push(BasicCommands::Turn{body_turn});
+                m_env.m_body_angle = target_body_angle;
+            }
+            if(std::abs(m_env.m_head_angle) > Agent::MIN_ANGLE_TO_TURN_NECK) {
+                m_command_queue.push(BasicCommands::TurnNeck{-m_env.m_head_angle});
+            }
+            m_env.m_head_angle = 0.0;
+            return 0;
+        }
+
+        // Caso o ponto esteja tenha um ângulo relativo grande demais
+        if(std::abs(angle_relative) > 90) {
+            m_command_queue.push(
+                BasicCommands::Turn{
+                    angle_relative
+                }
+            );
+            m_env.m_body_angle = GeneralMath::normalize_angle(
+                m_env.m_body_angle + angle_relative
+            );
+            if(std::abs(m_env.m_head_angle) > Agent::MIN_ANGLE_TO_TURN_NECK) {
+                m_command_queue.push(
+                    BasicCommands::TurnNeck{
+                        - m_env.m_head_angle
+                    }
+                );
+                m_env.m_head_angle = 0;
+            };
+            return 0;
+        }
+
+        // Caso o ângulo entre a cabeça e o corpo esteja acima de um limiar
+        if(std::abs(m_env.m_head_angle) > Agent::MIN_DIF_ANGLE_TO_BODY_FOLLOW_HEAD) {
+            m_command_queue.push(
+                BasicCommands::Turn{
+                    m_env.m_head_angle
+                }
+            );
+            m_env.m_body_angle = GeneralMath::normalize_angle(
+                m_env.m_body_angle + m_env.m_head_angle
+            );
+            m_command_queue.push(
+                BasicCommands::TurnNeck{
+                    - m_env.m_head_angle + angle_relative
+                }
+            );
+            m_env.m_head_angle = GeneralMath::normalize_angle(angle_relative);
+            return 0;
+        }
+
+        // Execução normal
+        m_command_queue.push(
+            BasicCommands::TurnNeck{
+                angle_relative
+            }
+        );
+        m_env.m_head_angle = GeneralMath::normalize_angle(m_env.m_head_angle + angle_relative);
+        return 0;
+    }
+
+    int Walk() {
+        // TER UMA VARIÁVEL INDICANDO SE A BOLA ESTÁ COM SEU TIME OU NÃO
+        // Se estiver a menos de uma distância mínima, anda até a bola
+        // Se estiver a menos de uma outra distância mínima, se posiciona entre o adversário e a bola
+        // Se nenhum dos anteriores, fica parado
+        return 0;
     }
 
     /**
@@ -408,18 +521,30 @@ public:
         if(perception_and_update()) {
             return 1;
         }
+        auto start_time = std::chrono::steady_clock::now();
 
         ///////////////////////////////////////////////////////////////////
         /* -- Ação -- */
         ///////////////////////////////////////////////////////////////////
 
+        /* Controle de Movimento Básico */
+        if(
+            Environment::CYCLE > 0 &&
+            static_cast<int>(m_value) % 12 == 0
+        ) {
+            m_env.m_logger.info("Cycle {} | Tentei executar o Seek_and_Focus.", Environment::CYCLE);
+            Seek_and_Focus(static_cast<int>(m_value / 10), true);
+        }
 
-
-
-
-
-
-
+        if(
+            Environment::CYCLE > 0
+        ) {
+            m_env.m_logger.info("Cycle {} | Tentei executar o dash.", Environment::CYCLE);
+            m_command_queue.push(
+                BasicCommands::Dash{40}
+            );
+        }
+        m_value++;
 
         ///////////////////////////////////////////////////////////////////
         /* -- Envio de Decisões -- */
@@ -431,13 +556,19 @@ public:
         // Populamos o vetor de informações
         if(m_verbose) {
             int idx = BasicAgent::TOTAL_ATTRS * (m_env.m_unum - 1);
-            BasicAgent::EACH_AGENT_INFO[idx] = m_ball_is_visible;
-            BasicAgent::EACH_AGENT_INFO[idx + 1] = m_env.m_position[0];
-            BasicAgent::EACH_AGENT_INFO[idx + 2] = m_env.m_position[1];
-            BasicAgent::EACH_AGENT_INFO[idx + 3] = m_env.m_body_angle;
-            BasicAgent::EACH_AGENT_INFO[idx + 4] = m_env.m_head_angle;
+            BasicAgent::EACH_AGENT_INFO.set(idx, m_ball_is_visible);
+            BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_position[0]);
+            BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_position[1]);
+            BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_body_angle);
+            BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_head_angle);
+            BasicAgent::EACH_AGENT_INFO.set(idx, static_cast<int>(m_value));
         }
 
+        auto end_time = std::chrono::steady_clock::now();
+        auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        if(elapsed_time < m_target_duration) {
+            std::this_thread::sleep_for(m_target_duration - elapsed_time);
+        }
         return 0;
     }
 };

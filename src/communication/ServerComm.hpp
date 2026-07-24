@@ -144,7 +144,6 @@ public:
 
     /**
      * @brief Envia mensagem imediatamente a partir de uma string.
-     * @details Incrementamos o size para forçar o envio do caractere nulo.
      * @param msg Mensagem a ser enviada.
      * @return true Se pelo menos um byte foi enviado.
      * @return false Se nenhum byte foi enviado (erro ou conexão fechada).
@@ -153,14 +152,13 @@ public:
         return send(
             m_fd,
             msg.data(),
-            msg.size() + 1,
+            msg.size(),
             0
         ) > 0;
     }
 
     /**
      * @brief Envia dados binários ou texto diretamente do buffer.
-     * @details Incrementamos o size para forçar o envio do caractere nulo.
      * @param data Ponteiro para os dados a serem enviados (geralmente buffer.data()).
      * @param size Número de bytes a serem transmitidos.
      * @return true Se pelo menos um byte foi enviado.
@@ -173,7 +171,7 @@ public:
         return send(
             m_fd,
             data,
-            size + 1,
+            size,
             0
         ) > 0;
     }

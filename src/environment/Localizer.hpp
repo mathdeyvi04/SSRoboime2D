@@ -4,6 +4,8 @@
 
 #include "./Environment.hpp"
 
+// todo necessary: Precisamos inserir a possibilidade de linhas no cálculo e colocar mais pontos
+// todo necessary: Importante termos uma medida de confiança da medida e colocarmos no menu de atributos apresentados
 class Localizer {
 public:
 

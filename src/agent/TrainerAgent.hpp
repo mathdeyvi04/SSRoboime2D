@@ -8,9 +8,12 @@
 #include <unistd.h>
 #include <termios.h>
 #include "../communication/ServerComm.hpp"
+#include "../logger/Logger.hpp"
 
 class TrainerAgent {
 private:
+
+    Logger& m_logger = Logger::get();
 
     /** @brief Forma de Comunicação com Servidor */
     ServerComm m_sc;
@@ -30,6 +33,9 @@ private:
 
     /** @brief Variável apenas para armazenar estado do buffer */
     termios m_original_terminal_config {};
+
+    /** @brief Mensagem (done) pré-pronta */
+    std::array<char, 7> done_message {'(', 'd', 'o', 'n', 'e', ')', '\0'};
 
 public:
 
@@ -181,6 +187,7 @@ public:
 
             if(!m_input_buffer.empty()) {
 
+                m_input_buffer += '\0';
                 m_sc.send_immediate(
                     m_input_buffer
                 );
@@ -279,7 +286,6 @@ public:
             bool is_see = message_from_server[1] == 's' &&
                           message_from_server[2] == 'e' &&
                           message_from_server[3] == 'e';
-
             m_menu_info[!is_see + 1] = message_from_server;
         }
 
@@ -322,7 +328,10 @@ public:
         if(elapsed_time < m_target_duration) {
             std::this_thread::sleep_for(m_target_duration - elapsed_time);
         }
-        m_sc.send_immediate("(done)");
+        m_sc.send_immediate(
+            done_message.data(),
+            done_message.size()
+        );
         // Faremos aqui apenas para evitar atraso do `(done)`
         if(elapsed_time < m_target_duration) {
             m_menu_info[0] = std::format("Tempo Dormido: {}", m_target_duration - elapsed_time);
