@@ -333,6 +333,7 @@ class AuxiliaryTacticalFormationTool(ctk.CTk):
         self.listbox.insert("end", new_formation)
         self.name_of_formation = new_formation
         self.active_positions = {}
+        self.total_formations[self.name_of_formation] = {}
         self.render_all()
 
     def deletar(self) -> None:
