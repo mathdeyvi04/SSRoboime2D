@@ -16,7 +16,7 @@ public:
     /** @brief Vetor de Informações de Pontos Fixos no Campo que poderão ser usados para localização
         @details Contém triplas sobre {index_points_field, posx_abs, posy_abs}
      */
-    inline static constexpr std::array<double, 27> INFO_LANDMARKS {
+    inline static constexpr std::array<double, 45> INFO_LANDMARKS {
         12, 0,                    0,                 // f c
         24, -WIDTH_FIELD / 2,     - HEIGHT_FIELD / 2,// f l t
         14, 0,                    - HEIGHT_FIELD / 2,// f c t
@@ -26,12 +26,20 @@ public:
         13, 0,                    HEIGHT_FIELD / 2,  // f c b
         20, -WIDTH_FIELD / 2,     HEIGHT_FIELD / 2,  // f l b
         54, -WIDTH_FIELD / 2,     0,                 // g l
+        33, 36.2,                 -20,               // f p r t
+        32, 36.2,                 0,                 // f p r c
+        31, 36.2,                 20,                // f p r b
+        30, -36.2,                -20,               // f p l t
+        29, -36.2,                0,                 // f p l c
+        28, -36.2,                20,                // f p l b
     };
 
     /** @brief Vetor que armazenará quais os indexs dos landmarks visíveis no array de informações de landmarks */
-    std::array<int, 9> m_index_info_landmarks_visibles {};
+    std::array<int, static_cast<int>(INFO_LANDMARKS.size() / 3)> m_index_info_landmarks_visibles {};
     /** @brief Contador para quantos landmarks estão visíveis */
     int m_count_for_landmarks_visibles {};
+    /** @brief Medidor de Confiança da Estimativa */
+    int m_confidence {0};
 
     /**
      * @brief Verifica se um ponto visível é um landmark conhecido.
@@ -115,6 +123,9 @@ public:
         std::array<double, 3>& position_player,
         std::array<Environment::Point, 60 + 11 * 2>& points_on_the_field
     ) {
+
+        // Uma forma de medirmos o quão confiável é a medida que estamos prestes a fazer
+        m_confidence = m_count_for_landmarks_visibles;
 
         // Caso não tenha a quantidade mínima de landmarks, não será possível
         if(m_count_for_landmarks_visibles < 2) {

@@ -43,12 +43,13 @@ public:
     std::chrono::milliseconds m_target_duration;
 
     /** @brief Número de atributos monitorados por agente */
-    inline static constexpr int TOTAL_ATTRS {6};
+    inline static constexpr int TOTAL_ATTRS {7};
 
     /** @brief Matriz 1D de atributos de todos os agentes (11 x TOTAL_ATTRS)
      *  - m_ball_is_visible
      *  - m_position_x
      *  - m_position_y
+     *  - m_confidence
      *  - m_body_angle
      *  - m_head_angle
      *  - m_value
@@ -70,9 +71,11 @@ public:
      * de ações possíveis (Dash, Turn, Kick, etc.).
      */
     std::queue<BasicCommands::AgentAction> m_command_queue {};
-    /* Buffer Reutilizável para Serialização dos Comandos */
+    /* @brief Buffer Reutilizável para Serialização dos Comandos */
     std::array<char, 64> m_command_buffer {};
-    /* Os seguintes comandos não podem ser acionados ao mesmo tempo: Dash, Turn, Kick */
+    /* @brief Flags de comandos corporais, Dash, Turn, Kick.
+     * Isso nos permitirá maior controle da característica do servidor de não aceitar diferentes comandos.
+    */
     bool m_body_command_flag {false};
 
     /**
@@ -436,8 +439,11 @@ public:
             double target_body_angle = GeneralMath::normalize_angle(m_env.m_body_angle + m_env.m_head_angle + angle_relative);
             double body_turn = GeneralMath::normalize_angle(target_body_angle - m_env.m_body_angle);
             if(std::abs(body_turn) > Agent::MIN_ANGLE_TO_TURN_NECK) {
-                m_command_queue.push(BasicCommands::Turn{body_turn});
-                m_env.m_body_angle = target_body_angle;
+                if(!m_body_command_flag) {
+                    m_command_queue.push(BasicCommands::Turn{body_turn});
+                    m_env.m_body_angle = target_body_angle;
+                    m_body_command_flag = true;
+                }
             }
             if(std::abs(m_env.m_head_angle) > Agent::MIN_ANGLE_TO_TURN_NECK) {
                 m_command_queue.push(BasicCommands::TurnNeck{-m_env.m_head_angle});
@@ -448,11 +454,14 @@ public:
 
         // Caso o ponto esteja tenha um ângulo relativo grande demais
         if(std::abs(angle_relative) > 90) {
-            m_command_queue.push(
-                BasicCommands::Turn{
-                    angle_relative
-                }
-            );
+            if(!m_body_command_flag) {
+                m_command_queue.push(
+                    BasicCommands::Turn{
+                        angle_relative
+                    }
+                );
+                m_body_command_flag = true;
+            }
             m_env.m_body_angle = GeneralMath::normalize_angle(
                 m_env.m_body_angle + angle_relative
             );
@@ -469,11 +478,14 @@ public:
 
         // Caso o ângulo entre a cabeça e o corpo esteja acima de um limiar
         if(std::abs(m_env.m_head_angle) > Agent::MIN_DIF_ANGLE_TO_BODY_FOLLOW_HEAD) {
-            m_command_queue.push(
-                BasicCommands::Turn{
-                    m_env.m_head_angle
-                }
-            );
+            if(!m_body_command_flag) {
+                m_command_queue.push(
+                    BasicCommands::Turn{
+                        m_env.m_head_angle
+                    }
+                );
+                m_body_command_flag = true;
+            }
             m_env.m_body_angle = GeneralMath::normalize_angle(
                 m_env.m_body_angle + m_env.m_head_angle
             );
@@ -532,17 +544,20 @@ public:
             Environment::CYCLE > 0 &&
             static_cast<int>(m_value) % 12 == 0
         ) {
-            m_env.m_logger.info("Cycle {} | Tentei executar o Seek_and_Focus.", Environment::CYCLE);
+//            m_env.m_logger.info("Cycle {} | Tentei executar o Seek_and_Focus.", Environment::CYCLE);
             Seek_and_Focus(static_cast<int>(m_value / 10), true);
         }
 
         if(
             Environment::CYCLE > 0
         ) {
-            m_env.m_logger.info("Cycle {} | Tentei executar o dash.", Environment::CYCLE);
-            m_command_queue.push(
-                BasicCommands::Dash{40}
-            );
+//            m_env.m_logger.info("Cycle {} | Tentei executar o dash.", Environment::CYCLE);
+            if(!m_body_command_flag) {
+                m_command_queue.push(
+                    BasicCommands::Dash{40}
+                );
+                m_body_command_flag = true;
+            }
         }
         m_value++;
 
@@ -559,6 +574,7 @@ public:
             BasicAgent::EACH_AGENT_INFO.set(idx, m_ball_is_visible);
             BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_position[0]);
             BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_position[1]);
+            BasicAgent::EACH_AGENT_INFO.set(idx, m_loc.m_confidence);
             BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_body_angle);
             BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_head_angle);
             BasicAgent::EACH_AGENT_INFO.set(idx, static_cast<int>(m_value));

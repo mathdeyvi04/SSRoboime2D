@@ -175,6 +175,7 @@ int main(int argc, char** argv) {
             "ball_is_visible",
             "position_x",
             "position_y",
+            "confidence",
             "body_angle",
             "head_angle",
             "m_value"
