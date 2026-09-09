@@ -180,7 +180,8 @@ public:
         // Após os loops terem sido executados, é possível:
         position_player[0] = sum_weighted_positions[0] / sum_weights;
         position_player[1] = sum_weighted_positions[1] / sum_weights;
-        position_player[2] = std::atan2(sum_weighted_sin, sum_weighted_cos);
+        double possible_pose = std::atan2(sum_weighted_sin, sum_weighted_cos);
+        position_player[2] = (std::abs(possible_pose) < 1e-7) ? 0 : possible_pose; // Apenas colocar um limiar
         return 0;
     }
 };

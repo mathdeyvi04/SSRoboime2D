@@ -75,7 +75,7 @@ public:
     std::array<double, 2> m_vector_vel {};
 
     /** @brief Vetor Polar velocidade relativo ao campo. {|vel|, vel_hat} */
-    std::array<double, 2> m_speed = {};
+    std::array<double, 2> m_speed {};
 
     /** @brief Ângulo do torso. Somente alterável por `turn`. */
     double m_body_angle {};

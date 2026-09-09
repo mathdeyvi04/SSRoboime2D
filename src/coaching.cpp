@@ -250,6 +250,10 @@
  * indirect_free_kick_r  - Tiro livre indireto para o time da direita
  */
 
+/** Segue uma explicação breve sobre as informações que estão sendo dispostas:
+ *  -> ((p "TeamName" UniformNumber) posx posy velx vely body_angle neck_angle)
+ */
+
 int main(int argc, char* argv[]) {
 
     /* -- Parsing de Possibilidades -- */

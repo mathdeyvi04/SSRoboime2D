@@ -259,6 +259,8 @@ public:
             m_env.m_position,
             m_env.m_points_on_the_field
         );
+        // Isso é uma aproximação MUITO SUPERIOR
+        m_env.m_body_angle = GeneralMath::normalize_angle(m_env.m_position[2] * 180 / GeneralMath::PI - m_env.m_head_angle);
 
         /*
         - Pode ser bom passearmos por todos os elementos visíveis de novo atualizando os correspondentes vetores posições
@@ -356,6 +358,8 @@ public:
 
     /**
      * @brief Direciona a visão do agente (corpo e/ou pescoço) para um ponto desejado.
+     * @details Não aplica as mudanças dos ângulos às variáveis. Ele espera o retorno da função `update_location` e da mensagem `see`
+     * do servidor para atualizar os valores de body_angle e head_angle.
      *
      * @param index_in_points_on_the_field  Índice do ponto no campo (1-59 para pontos fixos,
      *                                      qualquer outro valor para busca dinâmica; 0 ou negativo
@@ -431,70 +435,58 @@ public:
             return 0;
         }
 
-        // todo lazy: Observe que consideramos que todos os comandos foram bem sucedidos. O que não é necessariamente verdade. Além disso, quando se está em movimento, os ângulos girados não são exatamente esses, há uma pequena inconsistência.
+        // todo lazy: Observe que consideramos que todos os comandos foram bem sucedidos.
         angle_relative *= Agent::PARAM_TO_TURN_NECK_ON_SEEK_AND_FOCUS;
+
+        // Conforme o jogador se movimenta, o ângulo muda efetivamente girado é diferente.
+        // Inclusive, dependendo do jogador, o momento pode mudar também. Estes foram os valores que obtivemos para o id 0.
+        double TURN_CORRECTION = 1.05806 + 4.53338 * m_env.m_speed[0];
 
         // Se forçado, gira o corpo totalmente para o alvo e zera o pescoço
         if(force_full_body) {
             double target_body_angle = GeneralMath::normalize_angle(m_env.m_body_angle + m_env.m_head_angle + angle_relative);
             double body_turn = GeneralMath::normalize_angle(target_body_angle - m_env.m_body_angle);
             if(std::abs(body_turn) > Agent::MIN_ANGLE_TO_TURN_NECK) {
-                if(!m_body_command_flag) {
-                    m_command_queue.push(BasicCommands::Turn{body_turn});
-                    m_env.m_body_angle = target_body_angle;
-                    m_body_command_flag = true;
-                }
+                m_command_queue.push(BasicCommands::Turn{body_turn * TURN_CORRECTION});
+                m_body_command_flag = true;
             }
             if(std::abs(m_env.m_head_angle) > Agent::MIN_ANGLE_TO_TURN_NECK) {
                 m_command_queue.push(BasicCommands::TurnNeck{-m_env.m_head_angle});
             }
-            m_env.m_head_angle = 0.0;
             return 0;
         }
 
         // Caso o ponto esteja tenha um ângulo relativo grande demais
         if(std::abs(angle_relative) > 90) {
-            if(!m_body_command_flag) {
-                m_command_queue.push(
-                    BasicCommands::Turn{
-                        angle_relative
-                    }
-                );
-                m_body_command_flag = true;
-            }
-            m_env.m_body_angle = GeneralMath::normalize_angle(
-                m_env.m_body_angle + angle_relative
+            m_command_queue.push(
+                BasicCommands::Turn{
+                    angle_relative * TURN_CORRECTION
+                }
             );
+            m_body_command_flag = true;
             if(std::abs(m_env.m_head_angle) > Agent::MIN_ANGLE_TO_TURN_NECK) {
                 m_command_queue.push(
                     BasicCommands::TurnNeck{
                         - m_env.m_head_angle
                     }
                 );
-                m_env.m_head_angle = 0;
             };
             return 0;
         }
 
         // Caso o ângulo entre a cabeça e o corpo esteja acima de um limiar
-        if(std::abs(m_env.m_head_angle) > Agent::MIN_DIF_ANGLE_TO_BODY_FOLLOW_HEAD) {
-            if(!m_body_command_flag) {
-                m_command_queue.push(
-                    BasicCommands::Turn{
-                        m_env.m_head_angle
-                    }
-                );
-                m_body_command_flag = true;
-            }
-            m_env.m_body_angle = GeneralMath::normalize_angle(
-                m_env.m_body_angle + m_env.m_head_angle
+        if(std::abs(m_env.m_head_angle) > Agent::MIN_DIF_ANGLE_TO_BODY_FOLLOW_HEAD && !m_body_command_flag) {
+            m_command_queue.push(
+                BasicCommands::Turn{
+                    m_env.m_head_angle * TURN_CORRECTION
+                }
             );
             m_command_queue.push(
                 BasicCommands::TurnNeck{
                     - m_env.m_head_angle + angle_relative
                 }
             );
-            m_env.m_head_angle = GeneralMath::normalize_angle(angle_relative);
+            m_body_command_flag = true;
             return 0;
         }
 
@@ -504,7 +496,6 @@ public:
                 angle_relative
             }
         );
-        m_env.m_head_angle = GeneralMath::normalize_angle(m_env.m_head_angle + angle_relative);
         return 0;
     }
 
@@ -545,7 +536,7 @@ public:
             static_cast<int>(m_value) % 12 == 0
         ) {
 //            m_env.m_logger.info("Cycle {} | Tentei executar o Seek_and_Focus.", Environment::CYCLE);
-            Seek_and_Focus(static_cast<int>(m_value / 10), true);
+            Seek_and_Focus(m_value/ 12);
         }
 
         if(
@@ -578,6 +569,17 @@ public:
             BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_body_angle);
             BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_head_angle);
             BasicAgent::EACH_AGENT_INFO.set(idx, static_cast<int>(m_value));
+// Para a realização de testes interessantes
+//            m_env.m_logger.error("{},{},{},{},{},{},{},{}",
+//                                                   Environment::CYCLE,
+//                                                   m_env.m_position[0],
+//                                                   m_env.m_position[1],
+//                                                   m_env.m_position[2] * 180 / 3.141592,
+//                                                   m_loc.m_confidence,
+//                                                   m_env.m_body_angle,
+//                                                   m_env.m_head_angle,
+//                                                   m_env.m_speed[0]
+//                                 );
         }
 
         auto end_time = std::chrono::steady_clock::now();

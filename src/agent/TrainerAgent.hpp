@@ -7,6 +7,9 @@
 #include <sys/select.h>
 #include <unistd.h>
 #include <termios.h>
+#include <fstream>
+#include <sstream>
+#include <vector>
 #include "../communication/ServerComm.hpp"
 #include "../logger/Logger.hpp"
 
@@ -36,6 +39,9 @@ private:
 
     /** @brief Mensagem (done) pré-pronta */
     std::array<char, 7> done_message {'(', 'd', 'o', 'n', 'e', ')', '\0'};
+
+//    /** @brief Para caso desejarmos fazer algum estudo sobre os pontos e dados. */
+//    std::ofstream m_output {"./logs/see_messages_from_server_to_trainer.txt", std::ios::app};
 
 public:
 
@@ -90,6 +96,10 @@ public:
             TCSANOW,
             &raw
         );
+
+//        if (!m_output.is_open()) {
+//            std::exit(2);
+//        }
     }
 
     ~TrainerAgent() {
@@ -107,6 +117,8 @@ public:
          * em uma nova linha.
          */
         std::cout << '\n';
+
+//        m_output.close();
     }
 
     /**
@@ -249,6 +261,10 @@ public:
         system("clear");
 
         for(int i = 0; i < 3; ++i) {
+//            if(i == 1) {
+//                // Então trata-se do see_global, vamos inserir no arquivo
+//                m_output << m_menu_info[i] << "\n";
+//            }
             std::cout << m_menu_info[i] << '\n';
         }
 
