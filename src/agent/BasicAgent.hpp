@@ -133,9 +133,11 @@ public:
         const std::string& ip,
         int port,
         bool verbose,
-        float speed = 2.0 // Desejamos que seja mais rápido que trainer
+        float speed = 1.1 // Desejamos que seja mais rápido que trainer
     ) :
         m_sc{team_name, ip, port},
+        m_env{},
+        m_loc{m_env.m_points_on_the_field},
         m_target_duration{static_cast<const unsigned long>(100 * speed)}
     {
         // Inicializamos pontos principais
@@ -255,10 +257,13 @@ public:
         }
 
         // todo urgent: Ainda não há uma forma de atualizarmos a posição sem vermos os landmarks
-        m_loc.update_location(
+        int duration = m_loc.update_location(
             m_env.m_position,
             m_env.m_points_on_the_field
         );
+        if(duration > 0) {
+            m_env.m_logger.warn("Landmark Counter, Localizer Duration:{},{}", m_loc.m_confidence, duration);
+        }
         // Isso é uma aproximação MUITO SUPERIOR
         m_env.m_body_angle = GeneralMath::normalize_angle(m_env.m_position[2] * 180 / GeneralMath::PI - m_env.m_head_angle);
 
@@ -376,14 +381,6 @@ public:
         double posx_to_focus = 99.0,
         double posy_to_focus = 99.0
     ) {
-
-        // Vamos deixar aqui comentado e disponível, pois nunca se sabe quando pode vir a ser um problema de novo
-//        if(Environment::CYCLE_SENSE != Environment::CYCLE_SEE) {
-//            if(m_verbose) {
-//                m_env.m_logger.info("Cycle(see) {} | Cycle(sense) {}, P {} blocked Seek_and_Focus", Environment::CYCLE_SEE, Environment::CYCLE_SENSE, m_env.m_unum);
-//            }
-//            return 1;
-//        }
 
         bool is_initialized {false};
         double angle_relative {0};
@@ -536,7 +533,10 @@ public:
             static_cast<int>(m_value) % 12 == 0
         ) {
 //            m_env.m_logger.info("Cycle {} | Tentei executar o Seek_and_Focus.", Environment::CYCLE);
-            Seek_and_Focus(m_value/ 12);
+            Seek_and_Focus(static_cast<int>(m_value / 3), true);
+            if(m_value > 180) {
+                m_value = 0;
+            }
         }
 
         if(
@@ -568,18 +568,18 @@ public:
             BasicAgent::EACH_AGENT_INFO.set(idx, m_loc.m_confidence);
             BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_body_angle);
             BasicAgent::EACH_AGENT_INFO.set(idx, m_env.m_head_angle);
-            BasicAgent::EACH_AGENT_INFO.set(idx, static_cast<int>(m_value));
+            BasicAgent::EACH_AGENT_INFO.set(idx, m_value);
 // Para a realização de testes interessantes
-//            m_env.m_logger.error("{},{},{},{},{},{},{},{}",
-//                                                   Environment::CYCLE,
-//                                                   m_env.m_position[0],
-//                                                   m_env.m_position[1],
-//                                                   m_env.m_position[2] * 180 / 3.141592,
-//                                                   m_loc.m_confidence,
-//                                                   m_env.m_body_angle,
-//                                                   m_env.m_head_angle,
-//                                                   m_env.m_speed[0]
-//                                 );
+            m_env.m_logger.error("{},{},{},{},{},{},{},{}",
+                                                   Environment::CYCLE,
+                                                   m_env.m_position[0],
+                                                   m_env.m_position[1],
+                                                   m_env.m_position[2] * 180 / 3.141592,
+                                                   m_loc.m_confidence,
+                                                   m_env.m_body_angle,
+                                                   m_env.m_head_angle,
+                                                   m_env.m_speed[0]
+                                 );
         }
 
         auto end_time = std::chrono::steady_clock::now();

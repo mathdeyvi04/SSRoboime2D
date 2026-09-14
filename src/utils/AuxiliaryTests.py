@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import matplotlib.patches as mpatches
 from mpl_toolkits.mplot3d import Axes3D
+from collections import defaultdict
 from scipy.optimize import curve_fit
 
 def Seek_and_Focus():
@@ -372,7 +373,7 @@ def Turn_Correction():
                       alpha=0.8)
     ax2d.set_xlabel(r'$\theta_{\text{wished}}$', fontsize=12)
     ax2d.set_ylabel(r'$\theta_{\text{allowed}}$', fontsize=12)
-    ax2d.set_title(r"Verificando fator de correção 1 + $\beta$ * speed", fontsize=13)
+    ax2d.set_title(r"Verificando fator de correção $\alpha$ + $\beta$ * speed", fontsize=13)
     ax2d.grid(True, linestyle='--', alpha=0.3)
 
     cbar = fig.colorbar(sc, ax=ax2d, shrink=0.8)
@@ -381,7 +382,7 @@ def Turn_Correction():
     plt.tight_layout()
     plt.show()
 
-def Testing_Localization():
+def Testing_Localization_Precision():
     """
     Metodologia:
         No jogador, logger apresenta os dados no ciclo. No trainer, ele apresenta as informações que recebeu em cada ciclo.
@@ -413,8 +414,9 @@ def Testing_Localization():
                 float(left_side.split(" ")[1])
             )
             data_from_trainer[-1].extend(
-                list(map(lambda x: float(x), right_side.split(" ")))
+                list(map(lambda x: float(x) if x else 0.0, right_side.split(" ")))
             )
+
 
     # Vamos medir o erro quadrático
     quadratic_error_pos = []
@@ -426,10 +428,13 @@ def Testing_Localization():
     i_t = 0
     while True:
 
-        ciclo_t, real_posx, real_posy, velx, vely, real_body_angle, real_head_angle = data_from_trainer[i_t]
-        ciclo_p, posx, posy, pose, confidence, body_angle, head_angle, speed = data_from_player[i_p]
-        i_t += 1
-        i_p += 1
+        try:
+            ciclo_t, real_posx, real_posy, velx, vely, real_body_angle, real_head_angle = data_from_trainer[i_t]
+            ciclo_p, posx, posy, pose, confidence, body_angle, head_angle, speed = data_from_player[i_p]
+            i_t += 1
+            i_p += 1
+        except:
+            break
 
         # Não desejamos ler as informações de ciclos zerados
         if ciclo_p == ciclo_t == 0.0:
@@ -494,4 +499,70 @@ def Testing_Localization():
     plt.tight_layout()
     plt.show()
 
-Testing_Localization()
+def Testing_Localization_Duration():
+
+    logs_folder = Path(__file__).parent.parent.parent / "logs"
+    with open(
+            next(logs_folder / path for path in listdir(logs_folder) if path.endswith(".log") and path.startswith("2")),
+            'r') as file:
+        data_from_player = [string[30:].split(":")[1].split(",") for string in file.read().split("\n") if
+                            string.find("WARN") != -1]
+        data_from_player = [
+            list(map(lambda x: int(x), group)) for group in data_from_player
+        ]
+
+    grupos = defaultdict(list)
+    for entrada, tempo in data_from_player:
+        grupos[entrada].append(tempo / 1000)
+
+    entradas = sorted(grupos.keys())
+    valores = [grupos[e] for e in entradas]
+
+    # --- Plot ---
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Boxplot
+    bp = ax.boxplot(
+        valores,
+        positions=entradas,
+        widths=0.25,  # ← caixas mais estreitas
+        patch_artist=True,
+        showfliers=False,  # outliers desenhados via jitter
+        medianprops=dict(linewidth=0),  # ← remove a linha da mediana
+        boxprops=dict(facecolor='lightsteelblue', alpha=0.7),
+        whiskerprops=dict(color='gray'),
+        capprops=dict(color='gray'),
+    )
+
+    # Stripplot (jitter) — pontos individuais
+    rng = np.random.default_rng(42)
+    for e, vals in zip(entradas, valores):
+        jitter = rng.uniform(-0.08, 0.08, size=len(vals))  # ← jitter menor p/ casar com a caixa
+        ax.scatter(
+            np.full(len(vals), e) + jitter,
+            vals,
+            alpha=0.6,
+            s=35,
+            color='crimson',
+            edgecolor='white',
+            linewidth=0.5,
+            zorder=3,
+            label='Amostras' if e == entradas[0] else None,
+        )
+
+    # Média como marcador distinto
+    medias = [np.mean(v) for v in valores]
+    ax.plot(entradas, medias, 'D--', color='darkgreen',
+            markersize=8, label='Média', zorder=4)
+
+    ax.set_xlabel('Landmark Counter', fontsize=12)
+    ax.set_ylabel('Duração (microseconds)', fontsize=12)
+    ax.set_title('Distribuição do tempo de execução por quantidade de landmarks', fontsize=13)
+    ax.set_xticks(entradas)
+    ax.grid(axis='y', alpha=0.3)
+    ax.legend(loc='upper left')
+    plt.tight_layout()
+    plt.show()
+
+Testing_Localization_Precision()
+Testing_Localization_Duration()

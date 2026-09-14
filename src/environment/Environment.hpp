@@ -229,18 +229,17 @@ public:
         Acredito que esses valores de `Change`, o qual significa variação, são interessantes
         no contexto de controle de erro PID e podem ser usados futuramente.
          */
-        std::array<double, 6> attrs;
+        std::array<double, 6> attrs {};
         /** @brief Array que armazenará a posição cartesiana relativo do ponto {Px_rel, Py_rel} ao jogador */
-        std::array<double, 2> pos_cart_rel;
+        std::array<double, 2> pos_cart_rel {};
         /** @brief Array que armazenará a posição cartesiana absoluta do ponto {Px, Py} ao centro */
-        std::array<double, 2> pos_cart_abs;
-
+        std::array<double, 2> pos_cart_abs {};
         /* Acredito que seja bom deixarmos em struct para posterior adição de funcionalidades */
     };
     /** @brief Array que armazenará todas os pontos possíveis e seus respectivos dados */
     std::array<Point, 60 + 11 * 2> m_points_on_the_field {
         /* Bola */
-        /* Landmarks */
+        /* Landmarks and Lines*/
         /* Players */
     };
     /** @brief Array que  armazenará o index de todos os pontos vísiveis no momento */

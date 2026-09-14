@@ -40,8 +40,8 @@ private:
     /** @brief Mensagem (done) pré-pronta */
     std::array<char, 7> done_message {'(', 'd', 'o', 'n', 'e', ')', '\0'};
 
-//    /** @brief Para caso desejarmos fazer algum estudo sobre os pontos e dados. */
-//    std::ofstream m_output {"./logs/see_messages_from_server_to_trainer.txt", std::ios::app};
+    /** @brief Para caso desejarmos fazer algum estudo sobre os pontos e dados. */
+    std::ofstream m_output {"./logs/see_messages_from_server_to_trainer.txt", std::ios::app};
 
 public:
 
@@ -97,9 +97,9 @@ public:
             &raw
         );
 
-//        if (!m_output.is_open()) {
-//            std::exit(2);
-//        }
+        if (!m_output.is_open()) {
+            std::exit(2);
+        }
     }
 
     ~TrainerAgent() {
@@ -118,7 +118,7 @@ public:
          */
         std::cout << '\n';
 
-//        m_output.close();
+        m_output.close();
     }
 
     /**
@@ -261,10 +261,10 @@ public:
         system("clear");
 
         for(int i = 0; i < 3; ++i) {
-//            if(i == 1) {
-//                // Então trata-se do see_global, vamos inserir no arquivo
-//                m_output << m_menu_info[i] << "\n";
-//            }
+            if(i == 1) {
+                // Então trata-se do see_global, vamos inserir no arquivo
+                m_output << m_menu_info[i] << "\n";
+            }
             std::cout << m_menu_info[i] << '\n';
         }
 
