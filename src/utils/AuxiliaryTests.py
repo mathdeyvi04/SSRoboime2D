@@ -1,7 +1,15 @@
 import re
 import math
+from pathlib import Path
+from os import listdir
+import numpy as np
+from pprint import pprint
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+import matplotlib.patches as mpatches
+from mpl_toolkits.mplot3d import Axes3D
+from collections import defaultdict
+from scipy.optimize import curve_fit
 
 def Seek_and_Focus():
     """
@@ -205,8 +213,8 @@ def Seek_and_Focus():
     for key in pos_x:
         for ball_x, ball_y in zip(pos_x[key], pos_y[key]):
             # Vetor do jogador até a bola
-            dx = ball_x - player_x
-            dy = ball_y - player_y
+            dx = ball_x,player_x
+            dy = ball_y,player_y
 
             # Ângulo em radianos
             angle_rad = math.atan2(dy, dx)
@@ -291,5 +299,270 @@ def Seek_and_Focus():
 
     plt.show()
 
+def Turn_Correction():
+    """
+    Metodologia:
+        Apenas gravar velocidade, ângulo de giro desejado e ângulo permitido pelo servidor
 
-Seek_and_Focus()
+    Objetivo:
+        Verificar a expressão de correção do turn e turn_neck do jogador para o servidor
+    """
+    # =============================================================================
+    # 1. DADOS (organizados verticalmente para fácil inserção)
+    # =============================================================================
+    angulo_desejado = np.array([
+        101.25, -101.25, 33.75, -33.75,
+        33.75, -33.75, -101.25, 101.25,
+        135, 109.6875, -107.578125, -101.25,
+        109.6875, -107.578125, 22.5, 67.5,
+        90, -101.25, 109.6875, -107.578125,
+        22.5
+    ])
+
+    speed = np.array([
+        0, 0, 0, 0,
+        0.15, 0.17, 0.15, 0.15,
+        0.17, 0.17, 0.16, 0.24,
+        0.24, 0.26, 0.26, 0.24,
+        0.26, 0.35, 0.35, 0.37,
+        0.33
+    ])
+
+    angulo_permitido = np.array([
+        94, -96, 34, -32,
+        18, -20, -58, 58,
+        76, 60, -65, -43,
+        51, -46, 10, 32,
+        37, -39, 43, -40,
+        7,
+    ])
+
+    # =============================================================================
+    # 2. REGRESSÃO
+    # =============================================================================
+    # Modelo: theta_allow = theta_wished / (a + b * V)
+    def modelo(par_dados, a, b):
+        theta_w, V = par_dados
+        return theta_w / (a + b * V)
+
+    # Empilha as variáveis independentes
+    dados_entrada = np.vstack((angulo_desejado, speed))
+
+    # Ajuste dos parâmetros a e b
+    a_otimizado, b_otimizado = curve_fit(modelo, dados_entrada, angulo_permitido, p0=[1.0, 4.83])[0]
+
+    # Valores previstos e R²
+    angulo_previsto = angulo_desejado / (a_otimizado + b_otimizado * speed)
+    residuos = angulo_permitido - angulo_previsto
+    ss_res = np.sum(residuos ** 2)
+    ss_tot = np.sum((angulo_permitido - np.mean(angulo_permitido)) ** 2)
+    r2 = 1 - (ss_res / ss_tot)
+
+    print(f"Parâmetro a otimizado: {a_otimizado:.5f}")
+    print(f"Parâmetro b otimizado: {b_otimizado:.5f}")
+    print(f"R² = {r2:.4f}")
+
+    # =============================================================================
+    # 3. FIGURA COM SUBPLOT 2D APENAS
+    # =============================================================================
+    fig, ax2d = plt.subplots(figsize=(10, 7))
+
+    # Scatter plot: angulo_desejado vs angulo_permitido colorido pela speed
+    sc = ax2d.scatter(angulo_desejado, angulo_permitido,
+                      c=speed, s=100, cmap='plasma', edgecolor='black', linewidth=1,
+                      alpha=0.8)
+    ax2d.set_xlabel(r'$\theta_{\text{wished}}$', fontsize=12)
+    ax2d.set_ylabel(r'$\theta_{\text{allowed}}$', fontsize=12)
+    ax2d.set_title(r"Verificando fator de correção $\alpha$ + $\beta$ * speed", fontsize=13)
+    ax2d.grid(True, linestyle='--', alpha=0.3)
+
+    cbar = fig.colorbar(sc, ax=ax2d, shrink=0.8)
+    cbar.set_label('Speed', fontsize=11)
+
+    plt.tight_layout()
+    plt.show()
+
+def Testing_Localization_Precision():
+    """
+    Metodologia:
+        No jogador, logger apresenta os dados no ciclo. No trainer, ele apresenta as informações que recebeu em cada ciclo.
+        A maioria do tratamento de informações é feito aqui.
+
+        Atenção, deixe apenas um elemento no ciclo 0.
+        Corte os \n iniciais e finais.
+
+    Objetivo:
+        Analisar os resultados obtidos pelo Localization
+    """
+
+    logs_folder = Path(__file__).parent.parent.parent / "logs"
+    with open(next(logs_folder / path for path in listdir(logs_folder) if path.endswith(".log") and path.startswith("2")), 'r') as file:
+        data_from_player = [string[30:].split(",") for string in file.read().split("\n")[:-2] if string.find("ERROR") != -1]
+        data_from_player = [
+            list(map(lambda x: float(x), message)) for message in data_from_player
+        ]
+
+    with open(logs_folder / "see_messages_from_server_to_trainer.txt", 'r') as file:
+        data_from_trainer_ = [string.split('((p "RoboIME" 1)') for string in file.read()[1:-1].split("\n") if string]
+        data_from_trainer = []
+
+        for left_side, right_side in data_from_trainer_:
+            data_from_trainer.append([])
+            right_side = right_side[1:-3]
+
+            data_from_trainer[-1].append(
+                float(left_side.split(" ")[1])
+            )
+            data_from_trainer[-1].extend(
+                list(map(lambda x: float(x) if x else 0.0, right_side.split(" ")))
+            )
+
+
+    # Vamos medir o erro quadrático
+    quadratic_error_pos = []
+    quadratic_error_body = []
+    quadratic_error_head = []
+    desconfidence = []
+    cycles = []
+    i_p = 0
+    i_t = 0
+    while True:
+
+        try:
+            ciclo_t, real_posx, real_posy, velx, vely, real_body_angle, real_head_angle = data_from_trainer[i_t]
+            ciclo_p, posx, posy, pose, confidence, body_angle, head_angle, speed = data_from_player[i_p]
+            i_t += 1
+            i_p += 1
+        except:
+            break
+
+        # Não desejamos ler as informações de ciclos zerados
+        if ciclo_p == ciclo_t == 0.0:
+            continue
+        # Devemos deixar os ciclos em sincronia
+        if ciclo_p > ciclo_t:
+            i_t += int(ciclo_p - ciclo_t)
+            continue
+        if ciclo_t > ciclo_p:
+            i_p += int(ciclo_t - ciclo_p)
+            continue
+        if i_t >= len(data_from_trainer) or i_p >= len(data_from_player):
+            break
+
+        cycles.append(ciclo_t)
+        quadratic_error_pos.append(
+            (((posx - real_posx) ** 2 + (posy - real_posy) ** 2) / (real_posx ** 2 + real_posy ** 2)) * 100 if (real_posx ** 2 + real_posy ** 2) != 0 else 0
+        )
+        quadratic_error_body.append(
+            (((body_angle - real_body_angle) ** 2) / (real_body_angle ** 2)) * 100 if real_body_angle != 0 else 0
+        )
+        quadratic_error_head.append(
+            (((head_angle - real_head_angle) ** 2) / (real_head_angle ** 2)) * 100 if real_head_angle != 0 else 0
+        )
+        desconfidence.append(
+            confidence
+        )
+
+    num_cycles = len(quadratic_error_body)
+
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, sharex=True, figsize=(10, 10))
+
+    # Primeiro gráfico: erro quadrático da posição
+    ax1.errorbar(cycles, quadratic_error_pos[:num_cycles],
+                 fmt='-o', color='red', capsize=0,
+                 markersize=4, linewidth=1.5)
+    ax1.set_ylabel('Erro quadrático em\npercentual posição')
+    ax1.grid(True, linestyle='--', alpha=0.5)
+
+    # Segundo gráfico: erro quadrático do ângulo do corpo
+    ax2.errorbar(cycles, quadratic_error_body[:num_cycles],
+                 fmt='-o', color='red', capsize=0,
+                 markersize=4, linewidth=1.5)
+    ax2.set_ylabel('Erro quadrático em\npercentual Body Angle')
+    ax2.grid(True, linestyle='--', alpha=0.5)
+
+    # Terceiro gráfico: erro quadrático do ângulo da cabeça
+    ax3.errorbar(cycles, quadratic_error_head[:num_cycles],
+                 fmt='-o', color='red', capsize=0,
+                 markersize=4, linewidth=1.5)
+    ax3.set_ylabel('Erro quadrático em\npercentual Head Angle')
+    ax3.grid(True, linestyle='--', alpha=0.5)
+
+    # Quarto gráfico: Landmark Counter (desconfiança)
+    ax4.plot(cycles, desconfidence[:num_cycles], '-o', color='purple',
+             markersize=4, linewidth=1.5)
+    ax4.set_ylabel('Landmark\nCounter')
+    ax4.set_xlabel('Ciclo')
+    ax4.grid(True, linestyle='--', alpha=0.5)
+
+    # Ajusta espaçamento e exibe
+    plt.tight_layout()
+    plt.show()
+
+def Testing_Localization_Duration():
+
+    logs_folder = Path(__file__).parent.parent.parent / "logs"
+    with open(
+            next(logs_folder / path for path in listdir(logs_folder) if path.endswith(".log") and path.startswith("2")),
+            'r') as file:
+        data_from_player = [string[30:].split(":")[1].split(",") for string in file.read().split("\n") if
+                            string.find("WARN") != -1]
+        data_from_player = [
+            list(map(lambda x: int(x), group)) for group in data_from_player
+        ]
+
+    grupos = defaultdict(list)
+    for entrada, tempo in data_from_player:
+        grupos[entrada].append(tempo / 1000)
+
+    entradas = sorted(grupos.keys())
+    valores = [grupos[e] for e in entradas]
+
+    # --- Plot ---
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Boxplot
+    bp = ax.boxplot(
+        valores,
+        positions=entradas,
+        widths=0.25,  # ← caixas mais estreitas
+        patch_artist=True,
+        showfliers=False,  # outliers desenhados via jitter
+        medianprops=dict(linewidth=0),  # ← remove a linha da mediana
+        boxprops=dict(facecolor='lightsteelblue', alpha=0.7),
+        whiskerprops=dict(color='gray'),
+        capprops=dict(color='gray'),
+    )
+
+    # Stripplot (jitter) — pontos individuais
+    rng = np.random.default_rng(42)
+    for e, vals in zip(entradas, valores):
+        jitter = rng.uniform(-0.08, 0.08, size=len(vals))  # ← jitter menor p/ casar com a caixa
+        ax.scatter(
+            np.full(len(vals), e) + jitter,
+            vals,
+            alpha=0.6,
+            s=35,
+            color='crimson',
+            edgecolor='white',
+            linewidth=0.5,
+            zorder=3,
+            label='Amostras' if e == entradas[0] else None,
+        )
+
+    # Média como marcador distinto
+    medias = [np.mean(v) for v in valores]
+    ax.plot(entradas, medias, 'D--', color='darkgreen',
+            markersize=8, label='Média', zorder=4)
+
+    ax.set_xlabel('Landmark Counter', fontsize=12)
+    ax.set_ylabel('Duração (microseconds)', fontsize=12)
+    ax.set_title('Distribuição do tempo de execução por quantidade de landmarks', fontsize=13)
+    ax.set_xticks(entradas)
+    ax.grid(axis='y', alpha=0.3)
+    ax.legend(loc='upper left')
+    plt.tight_layout()
+    plt.show()
+
+Testing_Localization_Precision()
+Testing_Localization_Duration()

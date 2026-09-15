@@ -4,7 +4,7 @@ namespace Agent {
     /* Relacionados ao Seek_and_Focus */
     inline constexpr double MIN_ANGLE_TO_TURN_NECK = 2.0;
     inline constexpr double MIN_ANGLE_TO_TURN_BODY_AND_FOLLOW_NECK = 40.0;
-    inline constexpr double PARAM_TO_TURN_NECK_ON_SEEK_AND_FOCUS = 0.75;
+    inline constexpr double PARAM_TO_TURN_NECK_ON_SEEK_AND_FOCUS = 1.0;
     inline constexpr double MIN_DIF_ANGLE_TO_BODY_FOLLOW_HEAD = 40;
 } // namespace agent
 
