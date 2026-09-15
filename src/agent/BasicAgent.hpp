@@ -253,7 +253,9 @@ public:
             }
 
             // Verificamos posições fixas em campo
-            m_loc.verify_landmarks(index_point_visible);
+            if(index_point_visible > 1 && index_point_visible < 56) {
+                m_loc.verify_landmarks(index_point_visible);
+            }
         }
 
         // todo urgent: Ainda não há uma forma de atualizarmos a posição sem vermos os landmarks
@@ -282,14 +284,19 @@ public:
     /* -- Funções Não Triviais -- */
     ////////////////////////////////
 
+    /** @brief Conforme descoberto nos estudos sobre o comando Turn, faz-se necessário uma correção do valor passado */
+    double get_turn_correction() {
+        return 1.05806 + 4.53338 * m_env.m_speed[0];
+    }
+
     /**
      * @brief Função Auxiliar para Seek_and_Focus: Ângulos (em graus) para cada índice, calculados a partir dos tokens
      * direcionais segundo a convenção do servidor:
-     *  - bottom (b) → y positivo (+90°)
-     *  - top    (t) → y negativo (-90°)
-     *  - left   (l) → x negativo (180°)
-     *  - right  (r) → x positivo (0°)
-     *  - center (c) → (0,0)
+     *  - bottom (b) -> y positivo (+90°)
+     *  - top    (t) -> y negativo (-90°)
+     *  - left   (l) -> x negativo (180°)
+     *  - right  (r) -> x positivo (0°)
+     *  - center (c) -> (0,0)
      *
      * O primeiro token de cada sequência é ignorado (categoria), os demais
      * são somados vetorialmente. O ângulo resultante é arredondado para
@@ -357,10 +364,8 @@ public:
          0.0,    // 58  "lr"
        -90.0     // 59  "lt"
     };
-
     /** @brief Counter para contarmos quantas vezes estamos usando informações desatualizadas */
     int m_use_outdated_information_seek_and_focus {};
-
     /**
      * @brief Direciona a visão do agente (corpo e/ou pescoço) para um ponto desejado.
      * @details Não aplica as mudanças dos ângulos às variáveis. Ele espera o retorno da função `update_location` e da mensagem `see`
@@ -437,7 +442,7 @@ public:
 
         // Conforme o jogador se movimenta, o ângulo muda efetivamente girado é diferente.
         // Inclusive, dependendo do jogador, o momento pode mudar também. Estes foram os valores que obtivemos para o id 0.
-        double TURN_CORRECTION = 1.05806 + 4.53338 * m_env.m_speed[0];
+        double TURN_CORRECTION = get_turn_correction();
 
         // Se forçado, gira o corpo totalmente para o alvo e zera o pescoço
         if(force_full_body) {
@@ -528,25 +533,25 @@ public:
         ///////////////////////////////////////////////////////////////////
 
         /* Controle de Movimento Básico */
+
+        // Devemos impedir que ele saía de campo.
+        if(m_loc.check_if_out_of_field(m_env.m_position, m_env.m_body_angle)) {
+            m_command_queue.push(BasicCommands::Turn{GeneralMath::normalize_angle(180 * get_turn_correction())});
+            m_body_command_flag = true; // Como é o primeiro body movement, não precisamos nos preocupar com isso
+        }
+
         if(
             Environment::CYCLE > 0 &&
             static_cast<int>(m_value) % 12 == 0
         ) {
-//            m_env.m_logger.info("Cycle {} | Tentei executar o Seek_and_Focus.", Environment::CYCLE);
-            Seek_and_Focus(static_cast<int>(m_value / 3), true);
-            if(m_value > 180) {
+            Seek_and_Focus(static_cast<int>(m_value / 10), true);
+            if(m_value > 60 * 10) {
                 m_value = 0;
             }
         }
-
-        if(
-            Environment::CYCLE > 0
-        ) {
-//            m_env.m_logger.info("Cycle {} | Tentei executar o dash.", Environment::CYCLE);
+        if(Environment::CYCLE > 0) {
             if(!m_body_command_flag) {
-                m_command_queue.push(
-                    BasicCommands::Dash{40}
-                );
+                m_command_queue.push(BasicCommands::Dash{80});
                 m_body_command_flag = true;
             }
         }

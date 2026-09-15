@@ -120,18 +120,36 @@ public:
         // f b l 40
         5, -40, HEIGHT_FIELD / 2 + DIST_OFF_FIELD
     });
-
+    /**@brief Array para não precisarmos percorrer todos landmarks possíveis */
+    inline static constexpr auto LOOKUP_TABLE_TO_INFO_LANDMARKS = []() {
+        std::array<int, 56> lut {};
+        lut.fill(-1);
+        for(int i = 0; i < static_cast<int>(INFO_LANDMARKS.size()); i += 3) {
+            int idx = static_cast<int>(INFO_LANDMARKS[i]);
+            lut[idx] = i;
+        }
+        return lut;
+    } (); // Com isso executamos essa função anônima
     /** @brief Vetor que armazenará quais os indexs dos landmarks visíveis no array de informações de landmarks */
     std::array<int, static_cast<int>(INFO_LANDMARKS.size() / 3)> m_index_info_landmarks_visibles {};
     /** @brief Contador para quantos landmarks estão visíveis */
     int m_count_for_landmarks_visibles {};
     /** @brief Número Máximo de Landmarks que serão utilizados pelo algoritmo */
-    inline static constexpr int MAX_NUMBER_LANDMARKS_FOR_LOCALIZATION {10};
+    inline static constexpr int MAX_NUMBER_LANDMARKS_FOR_LOCALIZATION {8};
     /** @brief Máximo número de iterações do algoritmo de localização */
     inline static constexpr int MAX_NUMBER_ITERATIONS_FOR_LOCALIZATION {MAX_NUMBER_LANDMARKS_FOR_LOCALIZATION * (MAX_NUMBER_LANDMARKS_FOR_LOCALIZATION - 1) / 2};
     /** @brief Medidor de Confiança da Estimativa */
     int m_confidence {0};
 
+    /**
+     * @brief Inicializa as posições absolutas dos landmarks.
+     * @details Pensou-se em fazer isso em tempo de compilação, mas o points_on_the_field ainda não estaria gerado!
+     *
+     * @param points_on_the_field Vetor com os pontos do campo (landmarks e linhas)
+     *        cujas posições absolutas serão preenchidas.
+     * @note O laço percorre @ref INFO_LANDMARKS em passos de 3, garantindo que
+     *       cada iteração trate exatamente uma tripla `{ índice, x, y }`.
+     */
     Localizer(
         std::array<Environment::Point, 60 + 11 * 2>& points_on_the_field
     ) {
@@ -143,7 +161,6 @@ public:
             landmark.pos_cart_abs[1] = Localizer::INFO_LANDMARKS[i + 2];
         }
     }
-
     ~Localizer() = default;
 
     /**
@@ -152,22 +169,14 @@ public:
      * @return int 0 se o ponto é um landmark (registrado), 1 caso contrário.
      */
     int verify_landmarks(int index_point_visible) {
-
-        // A fim de melhorar a performance...
-        if(index_point_visible > 55 || index_point_visible < 12) {
+        int offset = Localizer::LOOKUP_TABLE_TO_INFO_LANDMARKS[index_point_visible];
+        if(offset < 0) {
             return 1;
         }
-
-        for(int i = 0; i < static_cast<int>(Localizer::INFO_LANDMARKS.size()); i = i + 3) {
-            if(static_cast<int>(Localizer::INFO_LANDMARKS[i]) == index_point_visible) {
-                // Achamos um landmark visível
-                m_index_info_landmarks_visibles[
-                    m_count_for_landmarks_visibles++
-                ] = i;
-                return 0;
-            }
-        }
-        return 1;
+        m_index_info_landmarks_visibles[
+            m_count_for_landmarks_visibles++
+        ] = offset;
+        return 0;
     }
 
     /**
@@ -230,7 +239,7 @@ public:
         // Para trabalharmos com as médias ponderadas
         double sum_weighted_x {}, sum_weight_x {};
         double sum_weighted_y {}, sum_weight_y {};
-        double sum_weighted_sin {}, sum_weighted_cos {}, sum_weight_theta {};
+        double sum_weighted_sin {}, sum_weighted_cos {};
         int iteration {};
         // Pares de Landmarks
         for(int i = 0; i < m_count_for_landmarks_visibles - 1; ++i) {
@@ -290,8 +299,48 @@ public:
         return duration;
     }
 
-    // Temos que conseguir prover uma forma de ele saber se está indo para fora do campo e impedir isso!
-    int check_if_out_of_field(std::array<double, 3>& position_player, double body_angle) {
-        return 0;
+    /**
+     * @brief Verifica se o jogador está fora do campo e se afastando dele.
+     *
+     * @param position_player Vetor {posx, posy, pose} com posição e orientação do jogador.
+     *                      Assume-se que pose é o body_angle em coordenadas de mundo.
+     * @param relative_angle Ângulo relativo ao body_angle (ex: pescoço) que define a direção de interesse.
+     * @return true  se o jogador está fora do campo E apontando para fora.
+     *         false se está dentro do campo ou, estando fora, aponta para o campo.
+     */
+    bool check_if_out_of_field(
+        const std::array<double, 3>& position_player,
+        double body_angle = 0.0
+    ) {
+        const double posx = position_player[0];
+        const double posy = position_player[1];
+
+        const double half_width  = (WIDTH_FIELD  - 4) / 2.0;
+        const double half_height = (HEIGHT_FIELD - 6) / 2.0;
+
+        const bool out_right  = posx >  half_width;
+        const bool out_left   = posx < -half_width;
+        const bool out_bottom = posy >  half_height;
+        const bool out_top    = posy < -half_height;
+
+        // Dentro do campo
+        if(!out_right && !out_left && !out_bottom && !out_top) {
+            return false;
+        }
+
+        // Ângulo-alvo: direção que o jogador deveria seguir para voltar
+        double target_angle;
+        if(out_bottom && out_right)      {target_angle = -135.0;}
+        else if(out_bottom && out_left)  {target_angle =  -45.0;}
+        else if(out_top    && out_right) {target_angle =  135.0;}
+        else if(out_top    && out_left)  {target_angle =   45.0;}
+        else if(out_bottom)              {target_angle =  -90.0;}
+        else if(out_top)                 {target_angle =   90.0;}
+        else if(out_right)               {target_angle =  180.0;}
+        else                             {target_angle =    0.0;}  // out_left
+
+        // Apontando para fora: body_angle está a mais de 90° do alvo
+        const double diff = GeneralMath::normalize_angle(body_angle - target_angle);
+        return std::abs(diff) > 90.0;
     }
 };
