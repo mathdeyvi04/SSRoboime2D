@@ -59,6 +59,12 @@ int main(int argc, char** argv) {
             ->default_value("false")
     )
     (
+        "b,basic-actions-test",
+        "Executar cenário multijogador de validação das ações básicas",
+        cxxopts::value<bool>()
+            ->default_value("false")
+    )
+    (
         "h,help",
         "Mostrar esta mensagem que está lida"
     );
@@ -108,6 +114,7 @@ int main(int argc, char** argv) {
 
     bool is_multithread = result["multithread"].as<bool>();
     bool verbose = result["verbose"].as<bool>();
+    const bool basic_actions_test = result["basic-actions-test"].as<bool>();
 
     if(verbose && !is_multithread) {
         std::cout << "Houve um erro de interpretação, o modo `verbose` só é possível com o modo `multithread`" << std::endl;
@@ -121,7 +128,23 @@ int main(int argc, char** argv) {
     std::array<std::unique_ptr<BasicAgent>, 11> team {}; // Iniciamos com máxima quantidade possível
 
     for(int i = 0; i < amount; ++i) {
-        team[i] = std::make_unique<BasicAgent>(team_name, ip, port, verbose);
+        team[i] = std::make_unique<BasicAgent>(
+            team_name,
+            ip,
+            port,
+            verbose,
+            2.0F,
+            basic_actions_test
+        );
+        if(
+            basic_actions_test
+            && team[i]->m_env.m_unum != static_cast<uint8_t>(i + 1)
+        ) {
+            throw std::runtime_error(
+                "O cenário basic-actions exige um servidor novo, com camisas 1 a 6. "
+                "Feche o rcssmonitor/rcssserver antigo e inicie call_rcsoccersim.sh novamente."
+            );
+        }
     }
 
     if(!is_multithread) {
@@ -170,8 +193,8 @@ int main(int argc, char** argv) {
         std::cout << "\033[2J";
         constexpr int WIDTH {15};
 
-        std::array<std::ostringstream, BasicAgent::TOTAL_ATTRS + 1> projetor;
-        std::array<std::string, BasicAgent::TOTAL_ATTRS> attr_names = {
+        std::array<std::ostringstream, Agent::TOTAL_ATTRS + 1> projetor;
+        std::array<std::string, Agent::TOTAL_ATTRS> attr_names = {
             "ball_is_visible",
             "position_x",
             "position_y",
@@ -193,14 +216,14 @@ int main(int argc, char** argv) {
             // E percorremos os jogadores vendo esse atributo
             for(
                 int idx_for_attr = 0;
-                idx_for_attr < BasicAgent::TOTAL_ATTRS;
+                idx_for_attr < Agent::TOTAL_ATTRS;
                 ++idx_for_attr
             ) {
 
                 projetor[idx_for_attr + 1] << std::setw(WIDTH) << attr_names[idx_for_attr];
                 for(int j = 0; j < amount; ++j) {
 
-                    projetor[idx_for_attr + 1] << std::setw(WIDTH) << BasicAgent::EACH_AGENT_INFO[j * BasicAgent::TOTAL_ATTRS + idx_for_attr];
+                    projetor[idx_for_attr + 1] << std::setw(WIDTH) << BasicAgent::EACH_AGENT_INFO[j * Agent::TOTAL_ATTRS + idx_for_attr];
                 }
             }
 

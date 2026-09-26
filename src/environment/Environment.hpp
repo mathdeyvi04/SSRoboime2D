@@ -269,13 +269,12 @@ public:
          * @note O cursor avança incluindo o caractere encontrado.
          */
         bool skip_until_char(char caract) {
-            while(*(m_cursor++) != caract) {
-                if(m_cursor > m_end) {
-                    return false;
+            while(m_cursor < m_end) {
+                if(*(m_cursor++) == caract) {
+                    return true;
                 }
             }
-
-            return true;
+            return false;
         }
 
         /**
@@ -289,9 +288,13 @@ public:
          * - Retorna a string entre os delimitadores
          */
         std::string_view get_next_str() {
-            while(*m_cursor == ' ' || *m_cursor == '('){ m_cursor++; }
+            while(m_cursor < m_end && (*m_cursor == ' ' || *m_cursor == '(')) {
+                ++m_cursor;
+            }
             const char* str_start = m_cursor;
-            while(*m_cursor != ' ' && *m_cursor != ')'){ m_cursor++; }
+            while(m_cursor < m_end && *m_cursor != ' ' && *m_cursor != ')') {
+                ++m_cursor;
+            }
             return {str_start, static_cast<size_t>(m_cursor - str_start)};
         }
 
@@ -303,7 +306,7 @@ public:
         void skip_unknown(int init_count = 1) {
 
             int count_pair = init_count;
-            while(count_pair != 0) {
+            while(count_pair != 0 && m_cursor < m_end) {
                 count_pair += (*m_cursor == '(') * (1) + (*m_cursor == ')') * (-1);
                 m_cursor++;
             }
@@ -332,6 +335,9 @@ public:
             while(true) {
 
                 std::string_view lower_tag = get_next_str();
+                if(lower_tag.empty()) {
+                    return;
+                }
                 switch(lower_tag[0]) {
                     case 'v': { // `view_mode`
 
@@ -359,7 +365,7 @@ public:
                     }
                     case 's': { // stamina speed
 
-                        if(lower_tag[1] == 't') {
+                        if(lower_tag.size() > 1 && lower_tag[1] == 't') {
                             for(auto& elemento : env.m_stamina_info) {
                                 std::string_view str_value = get_next_str();
                                 std::from_chars(
@@ -369,7 +375,7 @@ public:
                                 );
                             }
                         }
-                        else if(lower_tag[1] == 'p') {
+                        else if(lower_tag.size() > 1 && lower_tag[1] == 'p') {
                             for(auto& elemento : env.m_speed) {
                                 std::string_view str_value = get_next_str();
                                 std::from_chars(
@@ -415,7 +421,7 @@ public:
                         for(int i = 0; i < 3; ++i) {
 
                             std::string_view str_value = get_next_str();
-                            if(str_value[0] == 't') { // `target`
+                            if(!str_value.empty() && str_value[0] == 't') { // `target`
                                 str_value = get_next_str();
                                 std::from_chars(
                                     str_value.data(),
@@ -451,6 +457,9 @@ public:
                                 get_next_str();
                                 // Obter o objeto de foco
                                 std::string_view str_value = get_next_str();
+                                if(str_value.size() < 3) {
+                                    return;
+                                }
                                 switch(str_value[2]) {
                                     case 'n': { // `none`
 
@@ -522,6 +531,9 @@ public:
                                 // Cor de Cartão
                                 get_next_str();
                                 std::string_view str_value = get_next_str();
+                                if(str_value.empty()) {
+                                    return;
+                                }
                                 switch(str_value[0]) {
                                     case 'n': { // `none`
                                         env.m_fouls[1] = 0;
@@ -558,12 +570,8 @@ public:
                         }
                         break;
                     }
-                    default: {
-                        if(!lower_tag.size()) {
-                            return;
-                        }
+                    default:
                         break;
-                    }
                 }
             }
         }
@@ -625,10 +633,20 @@ public:
                         // que é apenas obter uma ordenação no array
 
                         skip_until_char(')');
+                        // Algumas versões representam goalie como sublista:
+                        // (p "Time" 1 (goalie)). Nesse caso ainda resta o
+                        // fechamento do identificador do jogador.
+                        if(m_cursor < m_end && *m_cursor == ')') {
+                            ++m_cursor;
+                        }
                         break;
                     }
 
                     // Caso não seja jogador, será ou flag de campo ou bola, que vem apenas em caracteres simples
+                    if(number_tokens >= static_cast<int>(tokens.size())) {
+                        skip_until_char(')');
+                        break;
+                    }
                     tokens[number_tokens++] = *(m_cursor++);
 
                     /*
@@ -749,6 +767,9 @@ public:
 
             // Teremos o sender
             std::string_view sender = get_next_str();
+            if(sender.empty()) {
+                return;
+            }
 
             // Com o sender, virão as possibilidades
             switch(sender[0]) {
@@ -820,11 +841,14 @@ public:
             m_cursor = message_from_server.data();
             m_end    = message_from_server.data() + message_from_server.size();
 
-            if(m_cursor == nullptr) {
+            if(message_from_server.empty() || m_cursor == nullptr) {
                 return;
             }
 
             std::string_view uppest_tag = get_next_str();
+            if(uppest_tag.empty()) {
+                return clean();
+            }
             switch (uppest_tag[0]) {
 
                 case 'i': { // init
@@ -833,7 +857,11 @@ public:
                         // Para que seja thread-safe, permitiremos que apenas o jogador 1 faça essas alterações.
                         break;
                     }
-                    Environment::IS_LEFT = get_next_str()[0] == 'l';
+                    const std::string_view side = get_next_str();
+                    if(side.empty()) {
+                        return clean();
+                    }
+                    Environment::IS_LEFT = side[0] == 'l';
                     // Devemos pular o número de uniforme, pois já está salvo no ServerComm
                     get_next_str();
                     // É garantido que teremos IS_LEFT definido daqui em diante

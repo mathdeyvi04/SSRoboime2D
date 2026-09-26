@@ -152,8 +152,11 @@ public:
                 Para tanto, usaremos médis ponderadas onde o peso leva em consideração
                 o inverso da distância e o condicionamento geométrico da dupla
                  */
-                double weight = std::abs(std::sin(landmark2.attrs[1] - landmark1.attrs[1])) /
-                                (landmark2.attrs[0] + landmark1.attrs[0]);
+                const double distances = landmark2.attrs[0] + landmark1.attrs[0];
+                const double weight = distances > GeneralMath::EPSILON
+                    ? std::abs(GeneralMath::sind(landmark2.attrs[1] - landmark1.attrs[1]))
+                        / distances
+                    : 0.0;
 
                 // Relacionado à pose
                 sum_weighted_sin += weight * std::sin(position_and_pose[2]);
@@ -164,6 +167,10 @@ public:
                 sum_weighted_positions[1] += weight * position_and_pose[1];
                 sum_weights += weight;
             }
+        }
+
+        if(sum_weights <= GeneralMath::EPSILON) {
+            return 1;
         }
 
         // Após os loops terem sido executados, é possível:

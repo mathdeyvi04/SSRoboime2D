@@ -6,6 +6,7 @@
 #include <string_view>
 #include <cstdint>
 #include <array>
+#include <charconv>
 
 // --- Para a manipulação de sockets em ambiente Linux
 #include <netinet/in.h>
@@ -86,7 +87,7 @@ public:
         );
         sockaddr_in from;
         socklen_t fromlength = sizeof(from);
-        recvfrom(
+        const ssize_t init_response_size = recvfrom(
             m_fd,
             m_buffer.data(),
             m_buffer.size(),
@@ -95,6 +96,39 @@ public:
             reinterpret_cast<sockaddr*>(&from),
             &fromlength
         );
+
+        // O servidor é a fonte de verdade para o número da camisa. Um contador
+        // local fica incorreto quando clientes reconectam ao mesmo servidor.
+        if(!m_is_trainer_agent && init_response_size > 0) {
+            const std::string_view response {
+                m_buffer.data(),
+                static_cast<size_t>(init_response_size)
+            };
+            const size_t init_separator = response.find(' ');
+            const size_t side_begin = init_separator == std::string_view::npos
+                ? std::string_view::npos
+                : response.find_first_not_of(' ', init_separator + 1);
+            const size_t side_end = side_begin == std::string_view::npos
+                ? std::string_view::npos
+                : response.find(' ', side_begin);
+            const size_t unum_begin = side_end == std::string_view::npos
+                ? std::string_view::npos
+                : response.find_first_not_of(' ', side_end + 1);
+            const size_t unum_end = unum_begin == std::string_view::npos
+                ? std::string_view::npos
+                : response.find(' ', unum_begin);
+            if(unum_begin != std::string_view::npos) {
+                int server_unum {};
+                const char* first = response.data() + unum_begin;
+                const char* last = unum_end == std::string_view::npos
+                    ? response.data() + response.size()
+                    : response.data() + unum_end;
+                const auto parsed = std::from_chars(first, last, server_unum);
+                if(parsed.ec == std::errc {} && server_unum >= 1 && server_unum <= 11) {
+                    m_unum = static_cast<uint8_t>(server_unum);
+                }
+            }
+        }
         // Troca de Portas do Server
         m_serveraddr.sin_port = from.sin_port;
         connect(

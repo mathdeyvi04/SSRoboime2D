@@ -36,7 +36,6 @@ int main(int argc, char* argv[]) {
     const std::string_view message = messages_from_server[std::stoi(argv[1])];
 
     Environment env {};
-    env.wp.update_from_server(message, env);
+    env.m_wp.update_from_server(message, env);
     return 0;
 }
-

@@ -1,0 +1,10 @@
+# Bola em movimento para validar previsão e interceptação.
+(change_mode before_kick_off)
+(move (player RoboIME 1) -20 0 0 0 0)
+(move (player RoboIME 2) -5 0 180 0 0)
+(move (player RoboIME 3) -15 12 0 0 0)
+(move (player RoboIME 4) -25 12 0 0 0)
+(move (player RoboIME 5) -10 -12 0 0 0)
+(move (player RoboIME 6) -20 -20 0 0 0)
+(move (ball) -10 0 0 1 0)
+(change_mode play_on)

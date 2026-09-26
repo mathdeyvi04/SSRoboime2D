@@ -1,5 +1,9 @@
 #include "./booting/cxxopts.hpp"
 #include "./agent/TrainerAgent.hpp"
+#include <filesystem>
+#include <fstream>
+#include <stdexcept>
+#include <vector>
 
 /**
  * @brief Guia Completo de Comandos do Trainer — rcssserver2d
@@ -250,6 +254,36 @@
  * indirect_free_kick_r  - Tiro livre indireto para o time da direita
  */
 
+std::vector<std::string> load_scenario(std::string scenario_name) {
+    if(scenario_name.empty()) {
+        return {};
+    }
+
+    std::filesystem::path scenario_path {scenario_name};
+    if(!scenario_path.has_parent_path() && !scenario_path.has_extension()) {
+        scenario_path = std::filesystem::path{"scenarios"} / (scenario_name + ".txt");
+    }
+
+    std::ifstream scenario_file {scenario_path};
+    if(!scenario_file) {
+        throw std::runtime_error(
+            "Não foi possível abrir o cenário: " + scenario_path.string()
+        );
+    }
+
+    std::vector<std::string> commands {};
+    std::string line {};
+    while(std::getline(scenario_file, line)) {
+        const size_t first = line.find_first_not_of(" \t\r");
+        if(first == std::string::npos || line[first] == '#') {
+            continue;
+        }
+        const size_t last = line.find_last_not_of(" \t\r");
+        commands.emplace_back(line.substr(first, last - first + 1));
+    }
+    return commands;
+}
+
 int main(int argc, char* argv[]) {
 
     /* -- Parsing de Possibilidades -- */
@@ -269,6 +303,12 @@ int main(int argc, char* argv[]) {
             ->default_value("1")
     )
     (
+        "c,scenario",
+        "Nome em scenarios/ ou caminho para um arquivo de comandos",
+        cxxopts::value<std::string>()
+            ->default_value("")
+    )
+    (
         "h,help",
         "Mostrar esta mensagem que está lida"
     );
@@ -285,7 +325,12 @@ int main(int argc, char* argv[]) {
 
     // Considerando que estamos treinando, estaremos em ambiente controlado por nós
     // Logo, localhost
-    TrainerAgent trainer {"127.0.0.1", 6001, result["speed"].as<float>()};
+    TrainerAgent trainer {
+        "127.0.0.1",
+        6001,
+        result["speed"].as<float>(),
+        load_scenario(result["scenario"].as<std::string>())
+    };
     while(true) {
 
         if(trainer.run()) {

@@ -4,6 +4,8 @@
 #include <chrono>
 #include <thread>
 #include <string>
+#include <queue>
+#include <vector>
 #include <sys/select.h>
 #include <unistd.h>
 #include <termios.h>
@@ -24,6 +26,12 @@ private:
     /** @brief Acumula bytes do stdin até que uma linha completa (\n) seja formada */
     std::string m_input_buffer {};
 
+    /** Comandos carregados de um arquivo de cenário, enviados um por ciclo. */
+    std::queue<std::string> m_scripted_commands {};
+    size_t m_scripted_commands_total {};
+    size_t m_scripted_commands_sent {};
+    std::string m_script_status {};
+
     /** @brief Guardará as últimas mensagens do servidor
      * [0] -> Delay entre ciclos
      * [1] -> see_global
@@ -42,11 +50,17 @@ public:
     TrainerAgent(
         const std::string& ip,
         int port,
-        float speed
+        float speed,
+        std::vector<std::string> scripted_commands = {}
     ) :
         m_sc{"", ip, port, true},
         m_target_duration{static_cast<const unsigned long>(speed * 100)}
     {
+        m_scripted_commands_total = scripted_commands.size();
+        for(std::string& command : scripted_commands) {
+            m_scripted_commands.push(std::move(command));
+        }
+
         /*
          * Salva a configuração original do terminal.
          */
@@ -237,6 +251,30 @@ public:
         return 0;
     }
 
+    /** Envia automaticamente o próximo comando do cenário, se houver. */
+    bool send_next_scripted_command() {
+        if(m_scripted_commands.empty()) {
+            return false;
+        }
+
+        const std::string& command = m_scripted_commands.front();
+        const bool sent = m_sc.send_immediate(command);
+        if(sent) {
+            ++m_scripted_commands_sent;
+            m_script_status = std::format(
+                "Cenário: {}/{} enviado: {}",
+                m_scripted_commands_sent,
+                m_scripted_commands_total,
+                command
+            );
+            m_scripted_commands.pop();
+        }
+        else {
+            m_script_status = std::format("Falha ao enviar: {}", command);
+        }
+        return true;
+    }
+
     /**
      * @brief Exibe o menu interativo no terminal.
      *
@@ -250,6 +288,10 @@ public:
 
         for(int i = 0; i < 3; ++i) {
             std::cout << m_menu_info[i] << '\n';
+        }
+
+        if(!m_script_status.empty()) {
+            std::cout << m_script_status << '\n';
         }
 
         std::cout << "> "
@@ -282,8 +324,9 @@ public:
             }
             break;
         }
-        if(message_from_server[1] != 't') { // Retiramos `(think)`
-            bool is_see = message_from_server[1] == 's' &&
+        if(message_from_server.size() > 1 && message_from_server[1] != 't') { // Retiramos `(think)`
+            bool is_see = message_from_server.size() > 3
+                          && message_from_server[1] == 's' &&
                           message_from_server[2] == 'e' &&
                           message_from_server[3] == 'e';
             m_menu_info[!is_see + 1] = message_from_server;
@@ -300,8 +343,9 @@ public:
             if(message_from_server.empty()) {
                 break;
             }
-            if(message_from_server[1] != 't') { // Retiramos `(think)`
-                bool is_see = message_from_server[1] == 's' &&
+            if(message_from_server.size() > 1 && message_from_server[1] != 't') { // Retiramos `(think)`
+                bool is_see = message_from_server.size() > 3
+                              && message_from_server[1] == 's' &&
                               message_from_server[2] == 'e' &&
                               message_from_server[3] == 'e';
 
@@ -321,7 +365,9 @@ public:
         if(print_menu()){
             return 0;
         }
-        check_and_send();
+        if(!send_next_scripted_command()) {
+            check_and_send();
+        }
 
         auto end_time = std::chrono::steady_clock::now();
         auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
