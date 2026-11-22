@@ -3,3 +3,4 @@ logs/
 venv/
 bin/
 __pycache__/
+.local/
