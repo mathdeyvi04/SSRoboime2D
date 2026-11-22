@@ -667,6 +667,9 @@ public:
             }
 
             const std::string_view cycle_text = cursor.atom();
+            if(cycle_text.empty()) {
+                return false;
+            }
             int cycle {};
             const auto cycle_result = std::from_chars(
                 cycle_text.data(), cycle_text.data() + cycle_text.size(), cycle
@@ -675,7 +678,13 @@ public:
                 return false;
             }
 
-            env.m_number_visibles = 0;
+            struct ObservedPoint {
+                uint8_t index {};
+                std::array<double, 6> attributes {};
+                std::array<double, 2> relative_position {};
+            };
+            std::array<ObservedPoint, 60 + 11 * 2> observations {};
+            size_t observation_count = 0;
             while(cursor.peek() != ')') {
                 if(!cursor.consume('(') || !cursor.consume('(')) {
                     return false;
@@ -691,6 +700,9 @@ public:
                     const std::string_view team = cursor.atom();
                     const std::string_view number = cursor.atom();
                     if(team.size() < 2 || team.front() != '"' || team.back() != '"') {
+                        return false;
+                    }
+                    if(number.empty()) {
                         return false;
                     }
                     int uniform {};
@@ -732,33 +744,51 @@ public:
                     if(number.empty() || attribute_count == attributes.size()) {
                         return false;
                     }
-                    std::from_chars(
+                    const auto parsed = std::from_chars(
                         number.data(), number.data() + number.size(),
                         attributes[attribute_count]
                     );
+                    if(parsed.ec != std::errc {}
+                        || parsed.ptr != number.data() + number.size()
+                        || !std::isfinite(attributes[attribute_count])) {
+                        return false;
+                    }
                     ++attribute_count;
                 }
                 if(!cursor.consume(')')) {
+                    return false;
+                }
+                if(attribute_count < 2) {
                     return false;
                 }
                 if(index == 255) {
                     continue;
                 }
                 if(index >= env.m_points_on_the_field.size()
-                    || env.m_number_visibles >= static_cast<int>(env.m_visibles_index.size())) {
+                    || observation_count >= observations.size()) {
                     return false;
                 }
 
-                Environment::Point& point = env.m_points_on_the_field[index];
-                point.attrs = attributes;
+                ObservedPoint& observed = observations[observation_count++];
+                observed.index = index;
+                observed.attributes = attributes;
                 GeneralMath::transform_polar_to_cartesian_relative(
-                    std::span<double, 2>(point.attrs.data(), 2), point.pos_cart_rel
+                    std::span<double, 2>(observed.attributes.data(), 2),
+                    observed.relative_position
                 );
-                env.m_visibles_index[env.m_number_visibles++] = index;
             }
             if(!cursor.consume(')') || !cursor.finished()) {
                 return false;
             }
+
+            for(size_t i = 0; i < observation_count; ++i) {
+                const ObservedPoint& observed = observations[i];
+                Environment::Point& point = env.m_points_on_the_field[observed.index];
+                point.attrs = observed.attributes;
+                point.pos_cart_rel = observed.relative_position;
+                env.m_visibles_index[i] = observed.index;
+            }
+            env.m_number_visibles = static_cast<int>(observation_count);
             if(env.m_unum == 1) {
                 Environment::CYCLE_SEE = cycle;
             }
@@ -838,9 +868,10 @@ public:
          * @details Atribui `nullptr` a ambos os ponteiros (início e fim)
          *          para evitar acesso indevido a memória.
          */
-        void clean() {
+        bool clean(bool result = true) {
             m_cursor = nullptr;
             m_end    = nullptr;
+            return result;
         }
 
     public:
@@ -848,7 +879,7 @@ public:
         /**
          * @brief A partir de mensagens do servidor, atualizará os dados do ambiente.
          */
-        void update_from_server(
+        bool update_from_server(
             const std::string_view& message_from_server,
             Environment& env
         ) {
@@ -857,12 +888,12 @@ public:
             m_end    = message_from_server.data() + message_from_server.size();
 
             if(message_from_server.empty() || m_cursor == nullptr) {
-                return;
+                return clean(false);
             }
 
             std::string_view uppest_tag = get_next_str();
             if(uppest_tag.empty()) {
-                return clean();
+                return clean(false);
             }
             switch (uppest_tag[0]) {
 
@@ -874,7 +905,7 @@ public:
                     }
                     const std::string_view side = get_next_str();
                     if(side.empty()) {
-                        return clean();
+                        return clean(false);
                     }
                     Environment::IS_LEFT = side[0] == 'l';
                     // Devemos pular o número de uniforme, pois já está salvo no ServerComm
@@ -900,10 +931,11 @@ public:
                     switch (uppest_tag.size()) {
 
                         case 3: { // see
-                            if(parse_see(env, message_from_server)) {
+                            const bool parsed = parse_see(env, message_from_server);
+                            if(parsed) {
                                 Environment::CYCLE = std::max(Environment::CYCLE_SENSE, Environment::CYCLE_SEE);
                             }
-                            return clean();
+                            return clean(parsed);
                         }
 
                         case 10: { // sense_body
@@ -965,8 +997,9 @@ public:
                         );
                     }
                     // Como trata-se de uma tag superior desconhecida, podemos apenas jogar o restante fora
-                    return clean(); // Vamos apenas pular essa mensagem
+                    return clean(false);
             }
+            return clean(false);
         }
     };
     WorldParser m_wp;

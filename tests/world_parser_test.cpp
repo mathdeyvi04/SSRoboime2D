@@ -17,7 +17,7 @@ void require(bool condition, std::string_view description) {
 void valid_see() {
     Environment env {};
     env.m_unum = 1;
-    env.m_wp.update_from_server("(see 12 ((b) 5 30))", env);
+    require(env.m_wp.update_from_server("(see 12 ((b) 5 30))", env), "valid see accepted");
     require(env.m_number_visibles == 1, "valid ball is visible");
     require(env.m_visibles_index[0] == 0, "ball index");
     require(env.m_points_on_the_field[0].attrs[0] == 5, "ball distance");
@@ -28,8 +28,8 @@ void valid_see() {
 void invalid_see_keeps_previous_observation(std::string_view message) {
     Environment env {};
     env.m_unum = 1;
-    env.m_wp.update_from_server("(see 20 ((b) 5 30))", env);
-    env.m_wp.update_from_server(message, env);
+    require(env.m_wp.update_from_server("(see 20 ((b) 5 30))", env), "setup see accepted");
+    require(!env.m_wp.update_from_server(message, env), "invalid see rejected");
     require(env.m_number_visibles == 1, "invalid message preserves visible count");
     require(env.m_visibles_index[0] == 0, "invalid message preserves ball index");
     require(env.m_points_on_the_field[0].attrs[0] == 5, "invalid message preserves distance");
