@@ -584,171 +584,186 @@ public:
          *
          * @param env Ambiente que receberá os dados processados.
          */
-        void parse_see(Environment& env) {
+        struct SeeCursor {
+            std::string_view input;
+            size_t position {};
 
-            // Pulamos a informação do ciclo
-            std::string_view str_cycle = get_next_str();
-            if(env.m_unum == 1) {
-                std::from_chars(str_cycle.data(), str_cycle.data() + str_cycle.size(), Environment::CYCLE_SEE);
+            void skip_spaces() {
+                while(position < input.size() && input[position] == ' ') {
+                    ++position;
+                }
             }
 
-            // Reiniciamos as variáveis necessárias
-            env.m_number_visibles = {};
-            std::array<char, 4> tokens {};
-            int number_tokens {};
-            while(*m_cursor != ')' && (m_cursor + 2) < m_end) {
+            char peek() {
+                skip_spaces();
+                return position < input.size() ? input[position] : '\0';
+            }
 
-                ///////////////////////////////////////////////////
-                /* Obtenção de tokens */
-                ///////////////////////////////////////////////////
+            bool consume(char expected) {
+                if(peek() != expected) {
+                    return false;
+                }
+                ++position;
+                return true;
+            }
 
-                // Aplicamos um deslocamento por conta dos espaçamentos que existem na mensagem `see`
-                m_cursor += 2;
-
-                // Reiniciamos variáveis para o loop
-                number_tokens = 0;
-                tokens[0] = 0; tokens[1] = 0; tokens[2] = 0; tokens[3] = 0;
-                while(*(m_cursor++) != ')') {
-
-                    // Caso seja informações de jogador
-                    if(*m_cursor == 'p' && !number_tokens) {
-                        // Temos algo como: (p "RoboIME" 8)
-
-                        // Pegamos o p
-                        tokens[number_tokens++] = *(m_cursor++);
-
-                        // Pegamos o nome do time
-                        std::string_view team_name = get_next_str();
-
-                        // Realizamos um tratamento rápido no nome
-                        team_name.remove_prefix(1);
-                        team_name.remove_suffix(1);
-                        tokens[number_tokens++] = team_name != env.m_team_name;
-
-                        // O número do jogador pode ser 10 ou 11
-                        std::string_view str_value = get_next_str();
-                        tokens[number_tokens++] = static_cast<char>(std::atoi(str_value.data()));
-
-                        // Às vezes vem a informação se é `goalie`, o que é inútil para o que estamos fazendo no momento
-                        // que é apenas obter uma ordenação no array
-
-                        skip_until_char(')');
-                        // Algumas versões representam goalie como sublista:
-                        // (p "Time" 1 (goalie)). Nesse caso ainda resta o
-                        // fechamento do identificador do jogador.
-                        if(m_cursor < m_end && *m_cursor == ')') {
-                            ++m_cursor;
-                        }
-                        break;
+            std::string_view atom() {
+                skip_spaces();
+                const size_t first = position;
+                if(first == input.size() || input[first] == '(' || input[first] == ')') {
+                    return {};
+                }
+                if(input[first] == '"') {
+                    ++position;
+                    while(position < input.size() && input[position] != '"') {
+                        ++position;
                     }
-
-                    // Caso não seja jogador, será ou flag de campo ou bola, que vem apenas em caracteres simples
-                    if(number_tokens >= static_cast<int>(tokens.size())) {
-                        skip_until_char(')');
-                        break;
+                    if(position == input.size()) {
+                        return {};
                     }
-                    tokens[number_tokens++] = *(m_cursor++);
+                    ++position;
+                    return input.substr(first, position - first);
+                }
+                while(position < input.size()
+                    && input[position] != ' '
+                    && input[position] != '('
+                    && input[position] != ')') {
+                    ++position;
+                }
+                return input.substr(first, position - first);
+            }
 
-                    /*
-                    Isso é para casos específicos nos quais os tokens são "(f r t 10)"
-                    Observe que o cursor parou em '0'. Daí, avançamos para o início das leituras
-                    dos valores do observado
-                    */
-                    if(*m_cursor == '0') {
-                        m_cursor += 2;
-                        break;
+            bool skip_balanced() {
+                if(!consume('(')) {
+                    return false;
+                }
+                int depth = 1;
+                bool quoted = false;
+                while(position < input.size() && depth != 0) {
+                    const char current = input[position++];
+                    if(current == '"') {
+                        quoted = !quoted;
+                    }
+                    else if(!quoted && current == '(') {
+                        ++depth;
+                    }
+                    else if(!quoted && current == ')') {
+                        --depth;
                     }
                 }
+                return depth == 0;
+            }
 
-                //////////////////////////////////////////
-                /* Obtenção do Elemento Observado */
-                //////////////////////////////////////////
+            bool finished() {
+                skip_spaces();
+                return position == input.size();
+            }
+        };
 
-                // Verificação de Erros de Invalidez
-                if(
-                    /*
-                    Em condições específicas o jogador reconhece elementos da seguinte forma:
-                        (F)   // Flag desconhecida
-                        (G)   // Gol desconhecido
-                        (B)   // Bola (em algumas situações de baixa qualidade da visão)
-                        (P)   // Jogador desconhecido
-                        (L)   // Linha desconhecida (dependendo da versão/configuração)
-                    Usamos essa primeira condição para impedir que haja tentativa de compreensão dessas observações
-                    */
-                    (number_tokens < 2 && tokens[0] != 'b') ||
-                    /*
-                    Caso algum jogador chegue com menos informações que o mínimo:
-                        (p)
-                        (p "TEAM")
-                        (p "TEAM" 7)
-                    Observe que no caso que há apenas o (p), faz-se necessário um avanço para permitir o funcionamento correto
-                    de `skip_until_char`.
-                    */
-                    (number_tokens < 3 && tokens[0] == 'p')
-                ) {
-                    if(tokens[0] == 'p') {
-                        m_cursor++;
-                    }
-                    skip_until_char(')');
-                    continue;
+        bool parse_see(Environment& env, std::string_view message) {
+            SeeCursor cursor {message};
+            if(!cursor.consume('(') || cursor.atom() != "see") {
+                return false;
+            }
+
+            const std::string_view cycle_text = cursor.atom();
+            int cycle {};
+            const auto cycle_result = std::from_chars(
+                cycle_text.data(), cycle_text.data() + cycle_text.size(), cycle
+            );
+            if(cycle_result.ec != std::errc {} || cycle_result.ptr != cycle_text.data() + cycle_text.size()) {
+                return false;
+            }
+
+            env.m_number_visibles = 0;
+            while(cursor.peek() != ')') {
+                if(!cursor.consume('(') || !cursor.consume('(')) {
+                    return false;
                 }
 
-                // Obtemos o index correspondente
-                uint8_t index = Environment::TokensToId(
-                    tokens[0],
-                    tokens[1],
-                    tokens[2],
-                    tokens[3]
-                );
-
-                // Verificações a existência dela
-                if(index == 255) {
-                    if(env.m_verbose) {
-                        env.m_logger.warn(
-                            "Conjunto Inválido em parse_see: ({}, {}, {}, {})",
-                            tokens[0],
-                            tokens[1],
-                            tokens[2],
-                            tokens[3]
-                        );
-                    }
-                    skip_until_char(')');
-                    continue;
+                std::array<char, 4> tokens {};
+                const std::string_view kind = cursor.atom();
+                if(kind.empty()) {
+                    return false;
                 }
-
-                // Então o ponto existe e foi visualizado
-                Environment::Point& point = env.m_points_on_the_field[index];
-                env.m_visibles_index[env.m_number_visibles++] = index;
-
-                //////////////////////////////////////////////////////////////////
-                /* Começamos a obtenção das informações do ponto observado */
-                //////////////////////////////////////////////////////////////////
-
-                int i = 0;
-                while(*m_cursor != ')') {
-                    std::string_view str_value = get_next_str();
-                    std::from_chars(
-                        str_value.data(),
-                        str_value.data() + str_value.size(),
-                        point.attrs[i++]
+                tokens[0] = kind.front();
+                if(kind == "p") {
+                    const std::string_view team = cursor.atom();
+                    const std::string_view number = cursor.atom();
+                    if(team.size() < 2 || team.front() != '"' || team.back() != '"') {
+                        return false;
+                    }
+                    int uniform {};
+                    const auto parsed = std::from_chars(
+                        number.data(), number.data() + number.size(), uniform
                     );
+                    if(parsed.ec != std::errc {} || parsed.ptr != number.data() + number.size()
+                        || uniform < 1 || uniform > 11) {
+                        return false;
+                    }
+                    tokens[1] = team.substr(1, team.size() - 2) != env.m_team_name;
+                    tokens[2] = static_cast<char>(uniform);
+                    if(cursor.peek() == '(' && !cursor.skip_balanced()) {
+                        return false;
+                    }
                 }
-                while(i != static_cast<int>(point.attrs.size())) {
-                    // Quando não tiver os valores para atualizar, apenas diremos que se trata de um valor específico
-                    point.attrs[i++] = 99;
+                else {
+                    size_t token_count = 1;
+                    while(cursor.peek() != ')') {
+                        const std::string_view token = cursor.atom();
+                        if(token.empty() || token_count == tokens.size()) {
+                            return false;
+                        }
+                        tokens[token_count++] = token.front();
+                    }
+                }
+                if(!cursor.consume(')')) {
+                    return false;
                 }
 
-                GeneralMath::transform_polar_to_cartesian_relative(
-                    // Fazemos span para forçar a visualização de apenas os dois primeiros elementos, os quais são comuns
-                    // a qualquer observado, sendo distância relativa e ângulo relativo
-                    std::span<double, 2>(point.attrs.data(), 2),
-                    point.pos_cart_rel
+                const uint8_t index = Environment::TokensToId(
+                    tokens[0], tokens[1], tokens[2], tokens[3]
                 );
+                std::array<double, 6> attributes {};
+                attributes.fill(99);
+                size_t attribute_count = 0;
+                while(cursor.peek() != ')') {
+                    const std::string_view number = cursor.atom();
+                    if(number.empty() || attribute_count == attributes.size()) {
+                        return false;
+                    }
+                    std::from_chars(
+                        number.data(), number.data() + number.size(),
+                        attributes[attribute_count]
+                    );
+                    ++attribute_count;
+                }
+                if(!cursor.consume(')')) {
+                    return false;
+                }
+                if(index == 255) {
+                    continue;
+                }
+                if(index >= env.m_points_on_the_field.size()
+                    || env.m_number_visibles >= static_cast<int>(env.m_visibles_index.size())) {
+                    return false;
+                }
 
-                m_cursor++;
+                Environment::Point& point = env.m_points_on_the_field[index];
+                point.attrs = attributes;
+                GeneralMath::transform_polar_to_cartesian_relative(
+                    std::span<double, 2>(point.attrs.data(), 2), point.pos_cart_rel
+                );
+                env.m_visibles_index[env.m_number_visibles++] = index;
             }
+            if(!cursor.consume(')') || !cursor.finished()) {
+                return false;
+            }
+            if(env.m_unum == 1) {
+                Environment::CYCLE_SEE = cycle;
+            }
+            return true;
         }
-
         /**
          * @brief Processa mensagens do tipo "hear" recebidas do servidor.
          *
@@ -885,8 +900,9 @@ public:
                     switch (uppest_tag.size()) {
 
                         case 3: { // see
-                            parse_see(env);
-                            Environment::CYCLE = std::max(Environment::CYCLE_SENSE, Environment::CYCLE_SEE);
+                            if(parse_see(env, message_from_server)) {
+                                Environment::CYCLE = std::max(Environment::CYCLE_SENSE, Environment::CYCLE_SEE);
+                            }
                             return clean();
                         }
 
